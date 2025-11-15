@@ -1,5 +1,4 @@
 # A dockerized badgr-server stack for development
-version: '3.3'
 services:
 
   # this container mirrors in the app code and runs the django dev server
@@ -8,13 +7,16 @@ services:
       context: .
       dockerfile: .docker/Dockerfile.dev.api
     depends_on:
-      - "db"
-      - "memcached"
-    command: /badgr_server/manage.py runserver 0.0.0.0:8000
+      db:
+        condition: service_healthy
+      memcached:
+        condition: service_started
+    command: "./.docker/etc/entrypoint.dev.sh"
     volumes:
       - ./apps:/badgr_server/apps
       - ./manage.py:/badgr_server/manage.py
       - ./.docker/etc/settings_local.dev.py:/badgr_server/apps/mainsite/settings_local.py
+      - ./.docker/etc/entrypoint.dev.sh:/badgr_server/.docker/etc/entrypoint.dev.sh
     networks:
       - badgr
     ports:
@@ -38,6 +40,12 @@ services:
       - "MYSQL_PASSWORD=password"
       - "MYSQL_HOST=db"
       - "MYSQL_ROOT_PASSWORD=password"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
     expose:
       - "3306"
     networks:

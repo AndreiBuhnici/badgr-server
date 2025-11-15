@@ -8,6 +8,8 @@ class BadgrConfig(AppConfig):
     name = 'mainsite'
 
     def ready(self):
+        import mainsite.signals
+
         # Makes sure all signal handlers are connected
         if getattr(settings, 'BADGR_CORS_MODEL'):
             from mainsite.signals import cors_allowed_sites

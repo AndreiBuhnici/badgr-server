@@ -54,7 +54,7 @@ CACHES = {
 # Email Configuration
 #
 ###
-DEFAULT_FROM_EMAIL = ''  # e.g. "noreply@example.com"
+DEFAULT_FROM_EMAIL = 'noreply@example.com'  # e.g. "noreply@example.com"
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
@@ -83,7 +83,7 @@ CORS_ORIGIN_WHITELIST = (
 )
 
 # Optionally restrict issuer creation to accounts that have the 'issuer.add_issuer' permission
-BADGR_APPROVED_ISSUERS_ONLY = False
+BADGR_APPROVED_ISSUERS_ONLY = True
 
 # Automatically send an email the first time that recipient identifier (email type) has been used on the system.
 GDPR_COMPLIANCE_NOTIFY_ON_FIRST_AWARD = True

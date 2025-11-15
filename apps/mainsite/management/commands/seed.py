@@ -3,6 +3,7 @@ from mainsite.models import *
 from badgeuser.models import *
 from oauth2_provider.models import *
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 User = get_user_model()
 
 class Command(BaseCommand):
@@ -33,12 +34,16 @@ class Command(BaseCommand):
         try:
             User.objects.create_superuser(username=variables['username'], email=variables['email'], password=variables['password'])
             CachedEmailAddress.objects.create(email=variables['email'], user_id=1, verified=True, primary=True)
+
+            # Create 'Approved Issuers' group with 'add_issuer' permission
+            g = Group.objects.create(name='Approved Issuers')
+            g.permissions.add(Permission.objects.get(name='Can add issuer'))
             
             # Setup an Application, initial Terms Summary and a BadgrApp:
             a = Application.objects.create(name="dev", client_id="public", client_type="public", redirect_uris=variables['fronturl']+"", authorization_grant_type="password")
-            ApplicationInfo.objects.create(allowed_scopes="rw:profile rw:issuer rw:backpack", application=a)
+            ApplicationInfo.objects.create(allowed_scopes="rw:profile rw:issuer rw:backpack r:issuer", application=a)
             TermsVersion.objects.create(is_active=True, version="1", short_description="This is a summary of our terms of service.")
-            BadgrApp.objects.create( name="dev", cors="localhost", email_confirmation_redirect=variables['fronturl']+"/login", 
+            BadgrApp.objects.create( name="dev", cors="localhost:4200", email_confirmation_redirect=variables['fronturl']+"/login", 
                 signup_redirect=variables['fronturl']+"/signup", 
                 forgot_password_redirect=variables['fronturl']+"/forgot-password/", 
                 ui_login_redirect=variables['fronturl']+"/login/", 
@@ -47,8 +52,9 @@ class Command(BaseCommand):
                 public_pages_redirect=variables['fronturl']+"/public", 
                 oauth_authorization_redirect=variables['fronturl']+"/auth/oauth2/authorize", 
                 oauth_application=a )
-        except:
+        except e:
             self.stdout.write("\nSomething went wrong. ./manage.py flush and try again.\n\n")
+            self.stdout.write(str(e))
             return
 
         summary = """
