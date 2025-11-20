@@ -479,25 +479,3 @@ def convert_svg_to_png(svg_string, height, width):
     except ValueError:
         # Issuing decoding response JSON
         return False
-
-# Utility functions for access token scope management
-def get_scope_for_user(user):
-    scopes = ["rw:profile", "rw:backpack", "r:issuer"]
-
-    if user.has_perm("issuer.add_issuer"):
-        scopes.append("rw:issuer")
-
-    return " ".join(scopes)
-
-
-def regenerate_user_access_token(user):
-    from mainsite.models import AccessTokenProxy, BadgrApp
-    app = BadgrApp.objects.get_current()
-
-    AccessTokenProxy.objects.filter(user=user).delete()
-
-    return AccessTokenProxy.objects.generate_new_token_for_user(
-        user,
-        application=app.oauth_application,
-        scope=get_scope_for_user(user)
-    )

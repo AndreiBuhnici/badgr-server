@@ -11,12 +11,11 @@ services:
         condition: service_healthy
       memcached:
         condition: service_started
-    command: "./.docker/etc/entrypoint.dev.sh"
+    command: '/badgr_server/manage.py runserver 0.0.0.0:8000'
     volumes:
       - ./apps:/badgr_server/apps
       - ./manage.py:/badgr_server/manage.py
       - ./.docker/etc/settings_local.dev.py:/badgr_server/apps/mainsite/settings_local.py
-      - ./.docker/etc/entrypoint.dev.sh:/badgr_server/.docker/etc/entrypoint.dev.sh
     networks:
       - badgr
     ports:
@@ -32,7 +31,7 @@ services:
 
   # this container runs mysql (database)
   db:
-    image: mysql:5.6.39
+    image: mysql:8.0
     volumes:
       - badgr_server_dev_db:/var/lib/mysql:rw
       - ./.docker/etc/init.sql:/docker-entrypoint-initdb.d/init.sql

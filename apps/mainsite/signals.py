@@ -7,7 +7,7 @@ from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 
 from mainsite.models import AccessTokenScope
-from mainsite.utils import netloc_to_domain, regenerate_user_access_token
+from mainsite.utils import netloc_to_domain
 
 CorsModel = apps.get_model(getattr(settings, 'BADGR_CORS_MODEL'))
 User = get_user_model()
@@ -34,12 +34,12 @@ def user_groups_changed(sender, instance, action, **kwargs):
     if action == "post_add":
         if 'issuer.add_issuer' not in new_perms:
             return  
-        regenerate_user_access_token(instance)
+        #invalidate old token
 
     elif action in ("post_remove", "post_clear"):
         if 'issuer.add_issuer' in new_perms:
             return
-        regenerate_user_access_token(instance)
+        #invalidate old token
 
 
 @receiver(m2m_changed, sender=User.user_permissions.through)
@@ -52,9 +52,9 @@ def user_permissions_changed(sender, instance, action, **kwargs):
     if action == "post_add":
         if 'issuer.add_issuer' not in new_perms:
             return  
-        regenerate_user_access_token(instance)
+        #invalidate old token
 
     elif action in ("post_remove", "post_clear"):
         if 'issuer.add_issuer' in new_perms:
             return
-        regenerate_user_access_token(instance)
+        #invalidate old token

@@ -15,6 +15,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='badgeinstance',
             name='recipient_identifier',
-            field=models.CharField(db_index=True, max_length=768),
+            field=models.CharField(db_index=True, max_length=191),
         ),
     ]
