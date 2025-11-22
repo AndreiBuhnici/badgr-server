@@ -452,7 +452,7 @@ class BadgeUserEmailConfirm(BaseUserRecoveryView):
         accesstoken = AccessTokenProxy.objects.generate_new_token_for_user(
             user,
             application=badgrapp.oauth_application if badgrapp.oauth_application_id else None,
-            scope='rw:backpack rw:profile r:issuer')
+            scope='rw:backpack rw:profile rw:issuer')
 
         redirect_url = get_adapter().get_email_confirmation_redirect_url(
             request, badgr_app=badgrapp)
