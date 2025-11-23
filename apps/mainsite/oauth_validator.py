@@ -40,6 +40,8 @@ class BadgrRequestValidator(OAuth2Validator):
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
         if request.user.has_perm('issuer.add_issuer') and 'rw:issuer' not in scopes:
             scopes.append('rw:issuer')
+        elif not request.user.has_perm('issuer.add_issuer') and 'rw:issuer' in scopes:
+            raise PermissionError("Not authorized to modify issuers")
 
         available_scopes = get_scopes_backend().get_available_scopes(application=client, request=request)
 

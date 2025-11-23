@@ -46,7 +46,7 @@ class IssuerList(BaseEntityListView):
         IsServerAdmin |
         (AuthenticatedWithVerifiedIdentifier & BadgrOAuthTokenHasScope & ApprovedIssuersOnly)
     ]
-    valid_scopes = ["rw:issuer"]
+    valid_scopes = ["r:issuer"]
 
     create_event = badgrlog.IssuerCreatedEvent
 

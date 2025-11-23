@@ -41,7 +41,7 @@ class Command(BaseCommand):
             
             # Setup an Application, initial Terms Summary and a BadgrApp:
             a = Application.objects.create(name="dev", client_id="public", client_type="public", redirect_uris=variables['fronturl']+"", authorization_grant_type="password")
-            ApplicationInfo.objects.create(allowed_scopes="rw:profile rw:issuer rw:backpack r:issuer", application=a)
+            ApplicationInfo.objects.create(allowed_scopes="rw:profile rw:backpack rw:issuer r:issuer", application=a)
             TermsVersion.objects.create(is_active=True, version="1", short_description="This is a summary of our terms of service.")
             BadgrApp.objects.create( name="dev", cors="localhost:4200", email_confirmation_redirect=variables['fronturl']+"/login", 
                 signup_redirect=variables['fronturl']+"/signup", 
