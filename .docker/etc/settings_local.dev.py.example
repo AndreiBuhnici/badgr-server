@@ -93,6 +93,18 @@ UNSUBSCRIBE_KEY = ''.join(random.choice(string.ascii_uppercase + string.digits) 
 UNSUBSCRIBE_SECRET_KEY = str(SECRET_KEY)
 
 
+
+# OAUTH2_PROVIDER = {
+#     "SCOPES": {
+#         'r:issuer': 'Read issuer data',
+#         'rw:issuer': 'Read and write issuer data',
+
+#         'rw:profile': 'Read and write profile data',
+#         'rw:backpack': 'Read and write badge data'
+#     },
+#     "DEFAULT_SCOPES" : ['rw:backpack', 'rw:profile', 'r:issuer']
+# }
+
 ###
 #
 # Logging
@@ -109,6 +121,12 @@ LOGGING = {
             'level': 'ERROR',
             'filters': [],
             'class': 'django.utils.log.AdminEmailHandler'
+        },
+
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'default',
         },
 
         # badgr events log to disk by default
@@ -128,7 +146,7 @@ LOGGING = {
 
         # Badgr.Events emits all badge related activity
         'Badgr.Events': {
-            'handlers': ['badgr_events'],
+            'handlers': ['console', 'badgr_events'],
             'level': 'INFO',
             'propagate': False,
 
