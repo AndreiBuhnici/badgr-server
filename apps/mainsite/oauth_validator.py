@@ -4,7 +4,9 @@ from django.conf import settings
 from oauth2_provider.oauth2_validators import OAuth2Validator
 from oauth2_provider.scopes import get_scopes_backend
 from oauthlib.oauth2 import Server
+import badgrlog
 
+badgrlogger = badgrlog.BadgrLogger()
 
 class BadgrOauthServer(Server):
     """
@@ -36,6 +38,9 @@ class BadgrRequestValidator(OAuth2Validator):
         return super(BadgrRequestValidator, self).authenticate_client(request, *args, **kwargs)
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
+        if request.user.has_perm('issuer.add_issuer') and 'rw:issuer' not in scopes:
+            scopes.append('rw:issuer')
+
         available_scopes = get_scopes_backend().get_available_scopes(application=client, request=request)
 
         for scope in scopes:
