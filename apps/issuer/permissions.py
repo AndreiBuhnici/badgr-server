@@ -215,7 +215,7 @@ class BadgrOAuthTokenHasScope(permissions.BasePermission):
 
             # fallback scopes for authenticated users
             if request.user and request.user.is_authenticated:
-                default_auth_scopes = set(['rw:profile', 'rw:issuer', 'rw:backpack'])
+                default_auth_scopes = set(['rw:profile', 'r:issuer', 'rw:backpack'])
                 if len(set(valid_scopes) & default_auth_scopes) > 0:
                     return True
 

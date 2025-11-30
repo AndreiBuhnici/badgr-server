@@ -447,7 +447,7 @@ class BadgeUser(BaseVersionedEntity, AbstractUser, cachemodel.CacheModel):
         return False
 
     @cachemodel.cached_method(auto_publish=True)
-    def cached_issuers(self):
+    def cached_issuers_current_user(self):
         return Issuer.objects.filter(staff__id=self.id).distinct()
 
     @property
@@ -455,10 +455,10 @@ class BadgeUser(BaseVersionedEntity, AbstractUser, cachemodel.CacheModel):
         """
         a BadgeUser is a Peer of another BadgeUser if they appear in an IssuerStaff together
         """
-        return set(chain(*[[s.cached_user for s in i.cached_issuerstaff()] for i in self.cached_issuers()]))
+        return set(chain(*[[s.cached_user for s in i.cached_issuerstaff()] for i in self.cached_issuers_current_user()]))
 
     def cached_badgeclasses(self):
-        return chain.from_iterable(issuer.cached_badgeclasses() for issuer in self.cached_issuers())
+        return chain.from_iterable(issuer.cached_badgeclasses() for issuer in self.cached_issuers_current_user())
 
     @cachemodel.cached_method(auto_publish=True)
     def cached_badgeinstances(self):

@@ -1,13 +1,13 @@
 from django.conf.urls import url
 
-from issuer.api import (IssuerList, IssuerDetail, IssuerBadgeClassList, BadgeClassDetail, BadgeInstanceList,
-                        BadgeInstanceDetail, IssuerBadgeInstanceList, AllBadgeClassesList, BatchAssertionsIssue,
-                        BatchAssertionsRevoke, IssuerTokensList, AssertionsChangedSince, BadgeClassesChangedSince,
-                        IssuersChangedSince)
+from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerDetail, IssuerBadgeClassList, BadgeClassDetail, 
+                        BadgeInstanceList, BadgeInstanceDetail, IssuerBadgeInstanceList, AllBadgeClassesList, 
+                        BatchAssertionsIssue, BatchAssertionsRevoke, IssuerTokensList, AssertionsChangedSince,
+                        BadgeClassesChangedSince, IssuersChangedSince)
 
 urlpatterns = [
-
-    url(r'^issuers$', IssuerList.as_view(), name='v2_api_issuer_list'),
+    url(r'^all-issuers$', IssuerPublicList.as_view(), name='v2_api_all_issuers_list'),
+    url(r'^issuers$', IssuerAuthorizedList.as_view(), name='v2_api_issuer_list'),
     url(r'^issuers/changed$', IssuersChangedSince.as_view(), name='v2_api_issuers_changed_list'),
     url(r'^issuers/(?P<entity_id>[^/]+)$', IssuerDetail.as_view(), name='v2_api_issuer_detail'),
     url(r'^issuers/(?P<entity_id>[^/]+)/assertions$', IssuerBadgeInstanceList.as_view(), name='v2_api_issuer_assertion_list'),

@@ -180,7 +180,8 @@ class Issuer(ResizeUploadedImage,
              PngImagePreview,
              BaseAuditedModel,
              BaseVersionedEntity,
-             BaseOpenBadgeObjectModel):
+             BaseOpenBadgeObjectModel,
+             cachemodel.CacheModel):
     entity_class_name = 'Issuer'
     COMPARABLE_PROPERTIES = ('badgrapp_id', 'description', 'email', 'entity_id', 'entity_version', 'name', 'pk',
                             'updated_at', 'url',)
@@ -203,6 +204,10 @@ class Issuer(ResizeUploadedImage,
 
     objects = IssuerManager()
     cached = SlugOrJsonIdCacheModelManager(slug_kwarg_name='entity_id', slug_field_name='entity_id')
+
+    @classmethod
+    def get_all_issuers(cls):
+        return cls.cached.all()
 
     def publish(self, publish_staff=True, *args, **kwargs):
         fields_cache = self._state.fields_cache  # stash the fields cache to avoid publishing related objects here

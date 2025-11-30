@@ -34,8 +34,27 @@ from mainsite.models import AccessTokenProxy
 
 logger = badgrlog.BadgrLogger()
 
+class IssuerPublicList(BaseEntityListView):
+    """
+    Issuer public list resource
+    """
+    model = Issuer
+    v1_serializer_class = IssuerSerializerV1
+    v2_serializer_class = IssuerSerializerV2
+    permission_classes = [AuthenticatedWithVerifiedIdentifier & BadgrOAuthTokenHasScope]
+    valid_scopes = ["r:issuer"]
 
-class IssuerList(BaseEntityListView):
+    def get_objects(self, request, **kwargs):
+        return Issuer.get_all_issuers()
+
+    @apispec_list_operation('Issuer',
+        summary="Get a list of all Issuers",
+        tags=["Issuers"],
+    )
+    def get(self, request, **kwargs):
+        return super(IssuerPublicList, self).get(request, **kwargs)
+
+class IssuerAuthorizedList(BaseEntityListView):
     """
     Issuer list resource for the authenticated user
     """
@@ -51,21 +70,21 @@ class IssuerList(BaseEntityListView):
     create_event = badgrlog.IssuerCreatedEvent
 
     def get_objects(self, request, **kwargs):
-        return self.request.user.cached_issuers()
+        return self.request.user.cached_issuers_current_user()
 
     @apispec_list_operation('Issuer',
         summary="Get a list of Issuers for authenticated user",
         tags=["Issuers"],
     )
     def get(self, request, **kwargs):
-        return super(IssuerList, self).get(request, **kwargs)
+        return super(IssuerAuthorizedList, self).get(request, **kwargs)
 
     @apispec_post_operation('Issuer',
         summary="Create a new Issuer",
         tags=["Issuers"],
     )
     def post(self, request, **kwargs):
-        return super(IssuerList, self).post(request, **kwargs)
+        return super(IssuerAuthorizedList, self).post(request, **kwargs)
 
 
 class IssuerDetail(BaseEntityDetailView):

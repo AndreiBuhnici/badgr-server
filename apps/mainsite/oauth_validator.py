@@ -34,7 +34,7 @@ class BadgrRequestValidator(OAuth2Validator):
                 request.grant_type = 'password'
                 request.client_id = getattr(settings, 'OAUTH2_DEFAULT_CLIENT_ID', 'public')
                 request.client_secret = ''
-                request.scopes = ['rw:profile', 'rw:issuer', 'rw:backpack']
+                request.scopes = ['rw:profile', 'r:issuer', 'rw:backpack']
         return super(BadgrRequestValidator, self).authenticate_client(request, *args, **kwargs)
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
