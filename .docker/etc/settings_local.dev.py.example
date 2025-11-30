@@ -94,16 +94,13 @@ UNSUBSCRIBE_SECRET_KEY = str(SECRET_KEY)
 
 
 
-# OAUTH2_PROVIDER = {
-#     "SCOPES": {
-#         'r:issuer': 'Read issuer data',
-#         'rw:issuer': 'Read and write issuer data',
-
-#         'rw:profile': 'Read and write profile data',
-#         'rw:backpack': 'Read and write badge data'
-#     },
-#     "DEFAULT_SCOPES" : ['rw:backpack', 'rw:profile', 'r:issuer']
-# }
+OAUTH2_PROVIDER = {
+    "SCOPES": {
+        'r:issuer': 'Read issuer data',
+        'rw:issuer': 'Read and write issuer data',
+        'rw:profile': 'Read and write profile data',
+        'rw:backpack': 'Read and write badge data'
+    },}
 
 ###
 #
