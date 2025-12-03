@@ -1,17 +1,19 @@
 from django.conf.urls import url
 
-from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerDetail, IssuerBadgeClassList, BadgeClassDetail, 
+from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerModifyDetail, IssuerBadgeClassList, BadgeClassDetail, 
                         BadgeInstanceList, BadgeInstanceDetail, IssuerBadgeInstanceList, AllBadgeClassesList, 
                         BatchAssertionsIssue, BatchAssertionsRevoke, IssuerTokensList, AssertionsChangedSince,
-                        BadgeClassesChangedSince, IssuersChangedSince)
+                        BadgeClassesChangedSince, IssuersChangedSince, IssuerBadgeClassPublicGetList, IssuerGetDetail)
 
 urlpatterns = [
     url(r'^all-issuers$', IssuerPublicList.as_view(), name='v2_api_all_issuers_list'),
     url(r'^issuers$', IssuerAuthorizedList.as_view(), name='v2_api_issuer_list'),
     url(r'^issuers/changed$', IssuersChangedSince.as_view(), name='v2_api_issuers_changed_list'),
-    url(r'^issuers/(?P<entity_id>[^/]+)$', IssuerDetail.as_view(), name='v2_api_issuer_detail'),
+    url(r'^issuers/(?P<entity_id>[^/]+)$', IssuerModifyDetail.as_view(), name='v2_api_issuer_detail'),
+    url(r'^issuers/(?P<entity_id>[^/]+)/details$', IssuerGetDetail.as_view(), name='v2_api_issuer_detail'),
     url(r'^issuers/(?P<entity_id>[^/]+)/assertions$', IssuerBadgeInstanceList.as_view(), name='v2_api_issuer_assertion_list'),
     url(r'^issuers/(?P<entity_id>[^/]+)/badgeclasses$', IssuerBadgeClassList.as_view(), name='v2_api_issuer_badgeclass_list'),
+    url(r'^issuers/(?P<entity_id>[^/]+)/all-badgeclasses$', IssuerBadgeClassPublicGetList.as_view(), name='v2_api_issuer_badgeclass_list'),
 
     url(r'^badgeclasses$', AllBadgeClassesList.as_view(), name='v2_api_badgeclass_list'),
     url(r'^badgeclasses/changed$', BadgeClassesChangedSince.as_view(), name='v2_api_badgeclasses_changed_list'),

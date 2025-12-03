@@ -86,8 +86,24 @@ class IssuerAuthorizedList(BaseEntityListView):
     def post(self, request, **kwargs):
         return super(IssuerAuthorizedList, self).post(request, **kwargs)
 
+class IssuerGetDetail(BaseEntityDetailView):
+    model = Issuer
+    v1_serializer_class = IssuerSerializerV1
+    v2_serializer_class = IssuerSerializerV2
+    permission_classes = [
+        IsServerAdmin |
+        (AuthenticatedWithVerifiedIdentifier & BadgrOAuthTokenHasScope)
+    ]
+    valid_scopes = ["r:issuer", "rw:issuer", "rw:serverAdmin"]
 
-class IssuerDetail(BaseEntityDetailView):
+    @apispec_get_operation('Issuer',
+        summary="Get a single Issuer",
+        tags=["Issuers"],
+    )
+    def get(self, request, **kwargs):
+        return super(IssuerGetDetail, self).get(request, **kwargs)
+
+class IssuerModifyDetail(BaseEntityDetailView):
     model = Issuer
     v1_serializer_class = IssuerSerializerV1
     v2_serializer_class = IssuerSerializerV2
@@ -98,27 +114,19 @@ class IssuerDetail(BaseEntityDetailView):
     ]
     valid_scopes = ["rw:issuer", "rw:issuer:*", "rw:serverAdmin"]
 
-    @apispec_get_operation('Issuer',
-        summary="Get a single Issuer",
-        tags=["Issuers"],
-    )
-    def get(self, request, **kwargs):
-        return super(IssuerDetail, self).get(request, **kwargs)
-
     @apispec_put_operation('Issuer',
        summary="Update a single Issuer",
        tags=["Issuers"],
    )
     def put(self, request, **kwargs):
-        return super(IssuerDetail, self).put(request, **kwargs)
+        return super(IssuerModifyDetail, self).put(request, **kwargs)
 
     @apispec_delete_operation('Issuer',
         summary="Delete a single Issuer",
         tags=["Issuers"],
     )
     def delete(self, request, **kwargs):
-        return super(IssuerDetail, self).delete(request, **kwargs)
-
+        return super(IssuerModifyDetail, self).delete(request, **kwargs)
 
 class AllBadgeClassesList(UncachedPaginatedViewMixin, BaseEntityListView):
     """
@@ -162,22 +170,19 @@ class AllBadgeClassesList(UncachedPaginatedViewMixin, BaseEntityListView):
     def post(self, request, **kwargs):
         return super(AllBadgeClassesList, self).post(request, **kwargs)
 
-
-class IssuerBadgeClassList(UncachedPaginatedViewMixin, VersionedObjectMixin, BaseEntityListView):
+class IssuerBadgeClassPublicGetList(UncachedPaginatedViewMixin, VersionedObjectMixin, BaseEntityListView):
     """
-    GET a list of badgeclasses within one issuer context or
-    POST to create a new badgeclass within the issuer context
+    GET a list of badgeclasses within one issuer context
     """
     model = Issuer  # used by get_object()
     permission_classes = [
         IsServerAdmin |
-        (AuthenticatedWithVerifiedIdentifier & IsEditor & BadgrOAuthTokenHasScope) |
-        BadgrOAuthTokenHasEntityScope
+        (AuthenticatedWithVerifiedIdentifier & BadgrOAuthTokenHasScope)
     ]
     v1_serializer_class = BadgeClassSerializerV1
     v2_serializer_class = BadgeClassSerializerV2
     create_event = badgrlog.BadgeClassCreatedEvent
-    valid_scopes = ["rw:issuer", "rw:issuer:*"]
+    valid_scopes = ["rw:issuer", "r:issuer"]
 
     def get_queryset(self, request=None, **kwargs):
         issuer = self.get_object(request, **kwargs)
@@ -187,7 +192,7 @@ class IssuerBadgeClassList(UncachedPaginatedViewMixin, VersionedObjectMixin, Bas
         return BadgeClass.objects.filter(issuer=issuer)
 
     def get_context_data(self, **kwargs):
-        context = super(IssuerBadgeClassList, self).get_context_data(**kwargs)
+        context = super(IssuerBadgeClassPublicGetList, self).get_context_data(**kwargs)
         context['issuer'] = self.get_object(self.request, **kwargs)
         return context
 
@@ -205,7 +210,28 @@ class IssuerBadgeClassList(UncachedPaginatedViewMixin, VersionedObjectMixin, Bas
         ]
     )
     def get(self, request, **kwargs):
-        return super(IssuerBadgeClassList, self).get(request, **kwargs)
+        return super(IssuerBadgeClassPublicGetList, self).get(request, **kwargs)
+
+
+class IssuerBadgeClassList(UncachedPaginatedViewMixin, VersionedObjectMixin, BaseEntityListView):
+    """
+    POST to create a new badgeclass within the issuer context
+    """
+    model = Issuer  # used by get_object()
+    permission_classes = [
+        IsServerAdmin |
+        (AuthenticatedWithVerifiedIdentifier & IsEditor & BadgrOAuthTokenHasScope) |
+        BadgrOAuthTokenHasEntityScope
+    ]
+    v1_serializer_class = BadgeClassSerializerV1
+    v2_serializer_class = BadgeClassSerializerV2
+    create_event = badgrlog.BadgeClassCreatedEvent
+    valid_scopes = ["rw:issuer:*"]
+
+    def get_context_data(self, **kwargs):
+        context = super(IssuerBadgeClassList, self).get_context_data(**kwargs)
+        context['issuer'] = self.get_object(self.request, **kwargs)
+        return context
 
     @apispec_post_operation('BadgeClass',
         summary="Create a new BadgeClass associated with an Issuer",
