@@ -242,10 +242,29 @@ class IssuerBadgeClassList(UncachedPaginatedViewMixin, VersionedObjectMixin, Bas
         issuer = self.get_object(request, **kwargs)  # trigger a has_object_permissions() check
         return super(IssuerBadgeClassList, self).post(request, **kwargs)
 
-
-class BadgeClassDetail(BaseEntityDetailView):
+class BadgeClassGetDetail(BaseEntityDetailView):
     """
     GET details on one BadgeClass.
+    """
+    model = BadgeClass
+    permission_classes = [
+        IsServerAdmin |
+        (AuthenticatedWithVerifiedIdentifier & BadgrOAuthTokenHasScope)
+    ]
+    v1_serializer_class = BadgeClassSerializerV1
+    v2_serializer_class = BadgeClassSerializerV2
+
+    valid_scopes = ["rw:issuer", "r:issuer"]
+
+    @apispec_get_operation('BadgeClass',
+        summary='Get a single BadgeClass',
+        tags=['BadgeClasses'],
+    )
+    def get(self, request, **kwargs):
+        return super(BadgeClassGetDetail, self).get(request, **kwargs)
+
+class BadgeClassModifyDetail(BaseEntityDetailView):
+    """
     PUT and DELETE should be restricted to BadgeClasses that haven't been issued yet.
     """
     model = BadgeClass
@@ -259,13 +278,6 @@ class BadgeClassDetail(BaseEntityDetailView):
 
     valid_scopes = ["rw:issuer", "rw:issuer:*"]
 
-    @apispec_get_operation('BadgeClass',
-        summary='Get a single BadgeClass',
-        tags=['BadgeClasses'],
-    )
-    def get(self, request, **kwargs):
-        return super(BadgeClassDetail, self).get(request, **kwargs)
-
     @apispec_delete_operation('BadgeClass',
         summary="Delete a BadgeClass",
         description="Restricted to owners or editors (not staff) of the corresponding Issuer.",
@@ -278,7 +290,7 @@ class BadgeClassDetail(BaseEntityDetailView):
         ])
     )
     def delete(self, request, **kwargs):
-        base_entity = super(BadgeClassDetail, self)
+        base_entity = super(BadgeClassModifyDetail, self)
         badge_class = base_entity.get_object(request, **kwargs)
 
         logger.event(badgrlog.BadgeClassDeletedEvent(badge_class, request.user))
@@ -290,7 +302,7 @@ class BadgeClassDetail(BaseEntityDetailView):
         tags=['BadgeClasses'],
     )
     def put(self, request, **kwargs):
-        return super(BadgeClassDetail, self).put(request, **kwargs)
+        return super(BadgeClassModifyDetail, self).put(request, **kwargs)
 
 
 class BatchAssertionsIssue(VersionedObjectMixin, BaseEntityView):

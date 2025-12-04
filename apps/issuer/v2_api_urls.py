@@ -1,9 +1,10 @@
 from django.conf.urls import url
 
-from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerModifyDetail, IssuerBadgeClassList, BadgeClassDetail, 
+from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerModifyDetail, IssuerBadgeClassList, BadgeClassModifyDetail, 
                         BadgeInstanceList, BadgeInstanceDetail, IssuerBadgeInstanceList, AllBadgeClassesList, 
                         BatchAssertionsIssue, BatchAssertionsRevoke, IssuerTokensList, AssertionsChangedSince,
-                        BadgeClassesChangedSince, IssuersChangedSince, IssuerBadgeClassPublicGetList, IssuerGetDetail)
+                        BadgeClassesChangedSince, IssuersChangedSince, IssuerBadgeClassPublicGetList, IssuerGetDetail,
+                        BadgeClassGetDetail)
 
 urlpatterns = [
     url(r'^all-issuers$', IssuerPublicList.as_view(), name='v2_api_all_issuers_list'),
@@ -17,7 +18,8 @@ urlpatterns = [
 
     url(r'^badgeclasses$', AllBadgeClassesList.as_view(), name='v2_api_badgeclass_list'),
     url(r'^badgeclasses/changed$', BadgeClassesChangedSince.as_view(), name='v2_api_badgeclasses_changed_list'),
-    url(r'^badgeclasses/(?P<entity_id>[^/]+)$', BadgeClassDetail.as_view(), name='v2_api_badgeclass_detail'),
+    url(r'^badgeclasses/(?P<entity_id>[^/]+)$', BadgeClassModifyDetail.as_view(), name='v2_api_badgeclass_detail'),
+    url(r'^badgeclasses/(?P<entity_id>[^/]+)/details$', BadgeClassGetDetail.as_view(), name='v2_api_badgeclass_detail'),
     url(r'^badgeclasses/(?P<entity_id>[^/]+)/issue$', BatchAssertionsIssue.as_view(), name='v2_api_badgeclass_issue'),
     url(r'^badgeclasses/(?P<entity_id>[^/]+)/assertions$', BadgeInstanceList.as_view(), name='v2_api_badgeclass_assertion_list'),
 

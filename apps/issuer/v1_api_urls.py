@@ -1,8 +1,8 @@
 from django.conf.urls import url
 
-from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerModifyDetail, IssuerBadgeClassList, BadgeClassDetail, 
+from issuer.api import (IssuerPublicList, IssuerAuthorizedList, IssuerModifyDetail, IssuerBadgeClassList, BadgeClassModifyDetail, 
                         BadgeInstanceList, BadgeInstanceDetail, IssuerBadgeInstanceList, AllBadgeClassesList, BatchAssertionsIssue,
-                        IssuerBadgeClassPublicGetList, IssuerGetDetail)
+                        IssuerBadgeClassPublicGetList, IssuerGetDetail, BadgeClassGetDetail)
 from issuer.api_v1 import FindBadgeClassDetail, IssuerStaffList
 
 urlpatterns = [
@@ -19,7 +19,8 @@ urlpatterns = [
 
     url(r'^issuers/(?P<slug>[^/]+)/badges$', IssuerBadgeClassList.as_view(), name='v1_api_badgeclass_list'),
     url(r'^issuers/(?P<slug>[^/]+)/all-badges$', IssuerBadgeClassPublicGetList.as_view(), name='v1_api_badgeclass_list'),
-    url(r'^issuers/(?P<issuerSlug>[^/]+)/badges/(?P<slug>[^/]+)$', BadgeClassDetail.as_view(), name='v1_api_badgeclass_detail'),
+    url(r'^issuers/(?P<issuerSlug>[^/]+)/badges/(?P<slug>[^/]+)/details$', BadgeClassGetDetail.as_view(), name='v1_api_badgeclass_detail'),
+    url(r'^issuers/(?P<issuerSlug>[^/]+)/badges/(?P<slug>[^/]+)$', BadgeClassModifyDetail.as_view(), name='v1_api_badgeclass_detail'),
 
     url(r'^issuers/(?P<issuerSlug>[^/]+)/badges/(?P<slug>[^/]+)/batchAssertions$', BatchAssertionsIssue.as_view(), name='v1_api_badgeclass_batchissue'),
 
