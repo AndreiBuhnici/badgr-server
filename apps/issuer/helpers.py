@@ -246,14 +246,8 @@ class BadgeCheckHelper(object):
 
         def commit_new_badge():
             with transaction.atomic():
-                issuer, issuer_created = Issuer.objects.get_or_create_from_ob2(issuer_obo, original_json=original_json.get(issuer_obo.get('id')), image=issuer_image)
-                badgeclass, badgeclass_created = BadgeClass.objects.get_or_create_from_ob2(issuer, badgeclass_obo, original_json=original_json.get(badgeclass_obo.get('id')), image=badgeclass_image)
-                if badgeclass_created and (
-                        getattr(settings, 'BADGERANK_NOTIFY_ON_BADGECLASS_CREATE', True) or
-                        getattr(settings, 'BADGERANK_NOTIFY_ON_FIRST_ASSERTION', True)
-                ):
-                    from issuer.tasks import notify_badgerank_of_badgeclass
-                    notify_badgerank_of_badgeclass.delay(badgeclass_pk=badgeclass.pk)
+                issuer = Issuer.objects.get_or_create_from_ob2(issuer_obo, original_json=original_json.get(issuer_obo.get('id')), image=issuer_image)
+                badgeclass = BadgeClass.objects.get_or_create_from_ob2(issuer, badgeclass_obo, original_json=original_json.get(badgeclass_obo.get('id')), image=badgeclass_image)
                 return BadgeInstance.objects.get_or_create_from_ob2(
                     badgeclass, assertion_obo,
                     recipient_identifier=recipient_identifier, recipient_type=recipient_type,
