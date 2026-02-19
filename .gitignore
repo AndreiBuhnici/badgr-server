@@ -1,6 +1,5 @@
 *.pyc
 *.egg
-settings_local.py
 settings_local.dev.py
 .*.sw*
 *~
