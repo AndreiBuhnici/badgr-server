@@ -17,7 +17,7 @@ from mainsite.models import BadgrApp
 from mainsite.serializers import DateTimeWithUtcZAtEndField, HumanReadableBooleanField, StripTagsCharField, MarkdownCharField, \
     OriginalJsonSerializerMixin
 from mainsite.utils import OriginSetting
-from mainsite.validators import ChoicesValidator, BadgeExtensionValidator, PositiveIntegerValidator, TelephoneValidator
+from mainsite.validators import ChoicesValidator, PositiveIntegerValidator, TelephoneValidator
 from .models import Issuer, BadgeClass, IssuerStaff, BadgeInstance, RECIPIENT_TYPE_EMAIL, RECIPIENT_TYPE_ID, RECIPIENT_TYPE_URL
 
 
@@ -316,7 +316,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
     allow_duplicate_awards = serializers.BooleanField(write_only=True, required=False, default=True)
     hashed = serializers.NullBooleanField(default=None, required=False)
 
-    extensions = serializers.DictField(source='extension_items', required=False, validators=[BadgeExtensionValidator()])
+    extensions = serializers.DictField(source='extension_items', required=False)
 
     class Meta:
         apispec_definition = ('Assertion', {})
@@ -367,7 +367,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
 
     def to_representation(self, instance):
         representation = super(BadgeInstanceSerializerV1, self).to_representation(instance)
-        representation['json'] = instance.get_json(obi_version="1_1", use_canonical_id=True)
+        representation['json'] = instance.get_json()
         if self.context.get('include_issuer', False):
             representation['issuer'] = IssuerSerializerV1(instance.cached_badgeclass.cached_issuer).data
         else:

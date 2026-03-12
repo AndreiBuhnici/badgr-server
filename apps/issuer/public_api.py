@@ -1,3 +1,4 @@
+import hashlib
 import math
 import os
 import re
@@ -5,8 +6,11 @@ import io
 import urllib.request, urllib.parse, urllib.error
 import urllib.parse
 
+from pyld import jsonld
+import base58
+from nacl.signing import VerifyKey
+
 import cairosvg
-import openbadges
 from PIL import Image
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
@@ -29,7 +33,7 @@ from entity.api import VersionedObjectMixin
 from mainsite.models import BadgrApp
 from mainsite.utils import (OriginSetting, set_url_query_params, first_node_match, fit_image_to_height,
                             convert_svg_to_png)
-from .models import Issuer, BadgeClass, BadgeInstance
+from .models import Issuer, BadgeClass, BadgeInstance, IssuerEncryptionKeys
 logger = badgrlog.BadgrLogger()
 
 
@@ -256,7 +260,7 @@ class ImagePropertyDetailView(APIView, SlugToEntityIdRedirectMixin):
         return redirect(image_url)
 
 
-class IssuerJson(JSONComponentView):
+class IssuerJsonOBV2(JSONComponentView):
     permission_classes = (permissions.AllowAny,)
     model = Issuer
 
@@ -277,6 +281,44 @@ class IssuerJson(JSONComponentView):
             public_url=self.current_object.public_url,
             image_url=image_url
         )
+    
+    def get_json(self, request, **kwargs):
+        try:
+            json = self.current_object.get_json(obi_version='2_0')
+        except ObjectDoesNotExist:
+            raise Http404
+
+        return json
+    
+class IssuerDidJson(JSONComponentView):
+    permission_classes = (permissions.AllowAny,)
+    model = Issuer
+
+    def log(self, obj):
+        logger.event(badgrlog.IssuerRetrievedEvent(obj, self.request))
+
+    def get_context_data(self, **kwargs):
+        image_url = "{}{}?type=png".format(
+            OriginSetting.HTTP,
+            reverse('issuer_image', kwargs={'entity_id': self.current_object.entity_id})
+        )
+        if self.is_wide_bot():
+            image_url = "{}&fmt=wide".format(image_url)
+
+        return dict(
+            title=self.current_object.name,
+            description=self.current_object.description,
+            public_url=self.current_object.public_url,
+            image_url=image_url
+        )
+    
+    def get_json(self, request, **kwargs):
+        try:
+            json = self.current_object.get_did_json(obi_version=self._get_request_obi_version(request), **kwargs)
+        except ObjectDoesNotExist:
+            raise Http404
+
+        return json
 
 
 class IssuerBadgesJson(JSONComponentView):
@@ -368,8 +410,8 @@ class BadgeInstanceJson(JSONComponentView):
         expands = request.GET.getlist('expand', [])
         json = super(BadgeInstanceJson, self).get_json(
             request,
-            expand_badgeclass=('badge' in expands),
-            expand_issuer=('badge.issuer' in expands)
+            external_did_signing_url=None,
+            expand_issuer=('issuer' in expands)
         )
 
         return json
@@ -579,78 +621,139 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
 
     def post(self, request, **kwargs):
         entity_id = request.data.get('entity_id')
+        external_did = request.data.get('external_did', None)
+        obi_version = self._get_request_obi_version(request)
+        if obi_version == '3_0':
+            entity_id = entity_id.split(':')[-1]
+
         badge_instance = self.get_object(entity_id)
 
-        #only do badgecheck verify if not a local badge
-        if (badge_instance.source_url):
-            recipient_profile = {
-                badge_instance.recipient_type: badge_instance.recipient_identifier
-            }
+        if obi_version == '3_0':
+            # Get the json
+            vc = badge_instance.get_json(obi_version=obi_version)
+            
+            # Remove proof options
+            proof = vc.pop("proof")
 
-            badge_check_options = {
-                'include_original_json': True,
-                'use_cache': True,
-            }
+            # Remove the proof value
+            proof_value = proof.pop("proofValue")
 
-            try:
-                response = openbadges.verify(badge_instance.jsonld_id, recipient_profile=recipient_profile, **badge_check_options)
-            except ValueError as e:
-                raise ValidationError([{'name': "INVALID_BADGE", 'description': str(e)}])
+            # Canonicalize the vc json and the proof options
+            canonicalized_vc = jsonld.normalize(
+                vc,
+                {
+                    'algorithm': 'URDNA2015',
+                    'format': 'application/n-quads'
+                }
+            )
 
-            graph = response.get('graph', [])
+            canonicalized_proof = jsonld.normalize(
+                proof,
+                {
+                    'algorithm': 'URDNA2015',
+                    'format': 'application/n-quads'
+                }
+            )
+            
+            # Hash the canonicalized vc and proof options
+            doc_hash = hashlib.sha256(canonicalized_vc.encode()).digest()
+            proof_hash = hashlib.sha256(canonicalized_proof.encode()).digest()
 
-            revoked_obo = first_node_match(graph, dict(revoked=True))
+            message = doc_hash + proof_hash
 
-            if bool(revoked_obo):
-                instance = BadgeInstance.objects.get(source_url=revoked_obo['id'])
-                if not instance.revoked:
-                    instance.revoke(revoked_obo.get('revocationReason', 'Badge is revoked'))
+            # Extract the signed message
+            signature = base58.b58decode(proof_value[1:])
 
+            # Get the public key of the issuer
+            if external_did is not None and external_did.startswith('did:web:'):
+                url = utils.convert_did_web_to_url(external_did)
+
+                # TODO: use url to download did json and extract public key
+                public_key_bytes = None
             else:
-                report = response.get('report', {})
-                is_valid = report.get('valid')
+                issuer_keys = badge_instance.cached_issuer.keys.filter(key_fragment=proof['verificationMethod'].split('#')[-1]).first()
+                public_key_bytes = issuer_keys.get_public_key_bytes()
+            
+            # Check the signature
+            verify_key = VerifyKey(public_key_bytes)
+            try:
+                verify_key.verify(message, signature)
+            except Exception as e:
+                raise ValidationError([{'name': "INVALID_SIGNATURE", 'description': 'Signature was forged or corrupt: {}'.format(str(e))}])
 
-                if not is_valid:
-                    if report.get('errorCount', 0) > 0:
-                        errors = [{'name': 'UNABLE_TO_VERIFY', 'description': 'Unable to verify the assertion'}]
-                    raise ValidationError(errors)
+        elif obi_version == '2_0':
+            pass
+            #only do badgecheck verify if not a local badge
+            # if (badge_instance.source_url):
+            #     recipient_profile = {
+            #         badge_instance.recipient_type: badge_instance.recipient_identifier
+            #     }
 
-                validation_subject = report.get('validationSubject')
+            #     badge_check_options = {
+            #         'include_original_json': True,
+            #         'use_cache': True,
+            #     }
 
-                badge_instance_obo = first_node_match(graph, dict(id=validation_subject))
-                if not badge_instance_obo:
-                    raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an badge instance'}])
+            #     try:
+            #         response = openbadges.verify(badge_instance.jsonld_id, recipient_profile=recipient_profile, **badge_check_options)
+            #     except ValueError as e:
+            #         raise ValidationError([{'name': "INVALID_BADGE", 'description': str(e)}])
 
-                badgeclass_obo = first_node_match(graph, dict(id=badge_instance_obo.get('badge', None)))
-                if not badgeclass_obo:
-                    raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find a badgeclass'}])
+            #     graph = response.get('graph', [])
 
-                issuer_obo = first_node_match(graph, dict(id=badgeclass_obo.get('issuer', None)))
-                if not issuer_obo:
-                    raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an issuer'}])
+            #     revoked_obo = first_node_match(graph, dict(revoked=True))
 
-                original_json = response.get('input').get('original_json', {})
+            #     if bool(revoked_obo):
+            #         instance = BadgeInstance.objects.get(source_url=revoked_obo['id'])
+            #         if not instance.revoked:
+            #             instance.revoke(revoked_obo.get('revocationReason', 'Badge is revoked'))
 
-                BadgeInstance.objects.update_from_ob2(
-                    badge_instance.badgeclass,
-                    badge_instance_obo,
-                    badge_instance.recipient_identifier,
-                    badge_instance.recipient_type,
-                    original_json.get(badge_instance_obo.get('id', ''), None)
-                )
+            #     else:
+            #         report = response.get('report', {})
+            #         is_valid = report.get('valid')
 
-                badge_instance.rebake(save=True)
+            #         if not is_valid:
+            #             if report.get('errorCount', 0) > 0:
+            #                 errors = [{'name': 'UNABLE_TO_VERIFY', 'description': 'Unable to verify the assertion'}]
+            #             raise ValidationError(errors)
 
-                BadgeClass.objects.update_from_ob2(
-                    badge_instance.issuer,
-                    badgeclass_obo,
-                    original_json.get(badgeclass_obo.get('id', ''), None)
-                )
+            #         validation_subject = report.get('validationSubject')
 
-                Issuer.objects.update_from_ob2(
-                    issuer_obo,
-                    original_json.get(issuer_obo.get('id', ''), None)
-                )
-        result = self.get_object(entity_id).get_json(expand_badgeclass=True, expand_issuer=True)
+            #         badge_instance_obo = first_node_match(graph, dict(id=validation_subject))
+            #         if not badge_instance_obo:
+            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an badge instance'}])
+
+            #         badgeclass_obo = first_node_match(graph, dict(id=badge_instance_obo.get('badge', None)))
+            #         if not badgeclass_obo:
+            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find a badgeclass'}])
+
+            #         issuer_obo = first_node_match(graph, dict(id=badgeclass_obo.get('issuer', None)))
+            #         if not issuer_obo:
+            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an issuer'}])
+
+            #         original_json = response.get('input').get('original_json', {})
+
+            #         BadgeInstance.objects.update_from_ob3(
+            #             badge_instance.badgeclass,
+            #             badge_instance_obo,
+            #             badge_instance.recipient_identifier,
+            #             badge_instance.recipient_type,
+            #             original_json.get(badge_instance_obo.get('id', ''), None)
+            #         )
+
+            #         badge_instance.rebake(save=True)
+
+            #         BadgeClass.objects.update_from_ob3(
+            #             badge_instance.issuer,
+            #             badgeclass_obo,
+            #             original_json.get(badgeclass_obo.get('id', ''), None)
+            #         )
+
+            #         Issuer.objects.update_from_ob3(
+            #             issuer_obo,
+            #             original_json.get(issuer_obo.get('id', ''), None)
+            #         )
+
+        result = self.get_object(entity_id).get_json(expand_issuer=True)
 
         return Response(BaseSerializerV2.response_envelope([result], True, 'OK'), status=status.HTTP_200_OK)

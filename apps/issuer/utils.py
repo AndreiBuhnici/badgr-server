@@ -1,3 +1,6 @@
+from cryptography.fernet import Fernet
+import urllib
+
 import aniso8601
 import hashlib
 import pytz
@@ -6,6 +9,7 @@ from urllib.parse import urlparse, urlunparse
 
 from django.urls import resolve, Resolver404
 from django.utils import timezone
+from django.conf import settings
 
 from mainsite.utils import OriginSetting
 
@@ -13,14 +17,25 @@ from mainsite.utils import OriginSetting
 OBI_VERSION_CONTEXT_IRIS = {
     '1_1': 'https://w3id.org/openbadges/v1',
     '2_0': 'https://w3id.org/openbadges/v2',
+    '3_0': 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'
 }
 
-CURRENT_OBI_VERSION = '2_0'
+DID_VERSION_CONTEXT = {
+    '1_0': 'https://www.w3.org/ns/did/v1'
+}
+
+CREDENTIALS_VERSION_CONTEXT = {
+    '2_0': 'https://www.w3.org/ns/credentials/v2'
+}
+
+CURRENT_OBI_VERSION = '3_0'
 CURRENT_OBI_CONTEXT_IRI = OBI_VERSION_CONTEXT_IRIS.get(CURRENT_OBI_VERSION)
 
 # assertions that were baked and saved to BadgeInstance.image used this version
 UNVERSIONED_BAKED_VERSION = '2_0'
 
+FERNET_KEY = getattr(settings, 'FIELD_ENCRYPTION_KEY', {})
+fernet = Fernet(FERNET_KEY)
 
 def get_obi_context(obi_version):
     context_iri = OBI_VERSION_CONTEXT_IRIS.get(obi_version, None)
@@ -29,6 +44,25 @@ def get_obi_context(obi_version):
         context_iri = CURRENT_OBI_CONTEXT_IRI
     return (obi_version, context_iri)
 
+def get_did_context(did_version):
+    context_iri = DID_VERSION_CONTEXT.get(did_version, None)
+    if context_iri is None:
+        did_version = '1_0'
+        context_iri = DID_VERSION_CONTEXT[did_version]
+    return (did_version, context_iri)
+
+def get_credentials_context(credentials_version):
+    context_iri = CREDENTIALS_VERSION_CONTEXT.get(credentials_version, None)
+    if context_iri is None:
+        credentials_version = '2_0'
+        context_iri = CREDENTIALS_VERSION_CONTEXT[credentials_version]
+    return (credentials_version, context_iri)
+
+def encrypt_value(value):
+    return fernet.encrypt(value.encode()).decode()
+
+def decrypt_value(value):
+    return fernet.decrypt(value.encode()).decode()
 
 def add_obi_version_ifneeded(url, obi_version):
     if obi_version == CURRENT_OBI_VERSION:
@@ -50,6 +84,27 @@ def generate_md5_hashstring(identifier, salt=None):
     key = '{}{}'.format(identifier, salt if salt is not None else "")
     return 'md5$' + hashlib.md5(key.encode('utf-8')).hexdigest()
 
+def convert_did_web_to_url(did, use_https=True):
+    url_parts = did.split(':')[2:]
+    url_parts[0] = urllib.parse.unquote(url_parts[0])
+
+    if len(url_parts) > 1:
+        url = str.join('/', url_parts) + '/did.json'
+    else:
+        url = url_parts[0] + '/.well-known/did.json'
+
+    # Skip https if we are testing
+    if use_https:
+        url = 'https://' + url
+    else:
+        url = 'http://' + url
+            
+    return url
+
+def convert_url_to_did_web(url):
+    parsed = urllib.parse.urlparse(url)
+    
+    return f"did:web:{urllib.parse.quote(parsed.netloc)}{parsed.path.replace('/', ':')}"
 
 def generate_rebaked_filename(oldname, badgeclass_filename):
     parts = oldname.split('.')

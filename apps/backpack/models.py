@@ -151,7 +151,6 @@ class BackpackCollection(BaseAuditedModelDeletedWithUser, BaseVersionedEntity):
             ]))
         ])
         json['badges'] = [b.get_json(obi_version=obi_version,
-                                     expand_badgeclass=expand_badgeclass,
                                      expand_issuer=expand_issuer,
                                      include_extra=include_extra) for b in self.cached_badgeinstances()]
 

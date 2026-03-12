@@ -18,9 +18,6 @@ from issuer.models import Issuer, BadgeClass
 from mainsite import TOP_DIR
 from mainsite.models import BadgrApp, ApplicationInfo, AccessTokenProxy
 
-from openbadges.verifier.openbadges_context import OPENBADGES_CONTEXT_V2_URI
-
-
 class SetupOAuth2ApplicationHelper(object):
     def setup_oauth2_application(self,
                                  client_id=None,
@@ -222,23 +219,39 @@ class BadgrTestCase(SetupUserHelper, APITransactionTestCase, CachingTestCase):
             )
 
 
-class Ob2Generators(object):
-    def generate_issuer_obo2(self, **kwargs):
+class Ob3Generators(object):
+    def generate_issuer_obo3(self, **kwargs):
         data = {
-            '@context': OPENBADGES_CONTEXT_V2_URI,
-            'id': 'https://example.com/issuer/1',
-            'type': 'Issuer',
+            '@context': [
+                    'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
+                    'https://www.w3.org/ns/did/v1',
+                    'https://www.w3.org/ns/credentials/v2'
+            ],
+            'id': 'did:web:example.com:issuer/1',
+            'type': 'Profile',
             'name': 'Basic Issuer',
-            'url': 'http://a.com/issuer/website'
+            'url': 'http://a.com/issuer/website',
+            'email': 'example@example.com',
+            'assertionMethod': [
+                'did:web:example.com:issuer:1#key-0'
+            ],
+            'verificationMethod': [
+                {
+                'id': 'did:web:example.com:issuer:1#key-0',
+                'type': 'Multikey',
+                'controller': 'did:web:example.com:issuer/1',
+                'publicKeyMultibase': "z2DeZaZzRZPhLSAyzmiRStSjXVxFb7KkNqUFbYEHCj1to9T"
+                }
+            ]
         }
         data.update(kwargs)
         return data
 
-    def generate_badgeclass_ob2(self, **kwargs):
+    def generate_badgeclass_ob3(self, **kwargs):
         data = {
-            '@context': OPENBADGES_CONTEXT_V2_URI,
+            '@context': 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
             'id': 'https://example.com/badgeclass/1',
-            'type': 'BadgeClass',
+            'type': 'Achievement',
             'name': 'Embedded badgeclass',
             'criteria': {
                 'narrative': 'do it'
@@ -250,38 +263,64 @@ class Ob2Generators(object):
         data.update(kwargs)
         return data
 
-    def generate_assertion_ob2(self, **kwargs):
+    def generate_assertion_ob3(self, **kwargs):
         data = {
-            '@context': OPENBADGES_CONTEXT_V2_URI,
-            'id': 'https://example.com/assertion/1',
-            'type': 'Assertion',
+            '@context': [
+                'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
+                'https://www.w3.org/ns/credentials/v2'
+            ],
+            'id': 'urn:uuid:1',
+            'type':  [
+                'VerifiableCredential',
+                'OpenBadgeCredential'
+            ],
             'issuedOn': '2017-06-29T21:50:14+00:00',
-            'recipient': {
-                'type': 'email',
-                'hashed': False,
-                'identity': 'test@example.com'
+            'credentialSubject': {
+                'type': 'AchievementSubject',
+                'achievement': {
+                    'id': 'https://example.com/badgeclass/1',
+                    'type': 'Achievement',
+                    'name': 'Embedded badgeclass',
+                    'criteria': {
+                        'narrative': 'do it'
+                    },
+                    'image': 'http://example.com/badgeclass/1/image',
+                    'description': 'a beautiful bespoke badgeclass',
+                    'issuer': 'https://example.com/issuer/1'
+                },
+                'identifier': {
+                    'type': 'IdentityObject',
+                    'identityType': 'email',
+                    'hashed': False,
+                    'identity': 'test@example.com'
+                }
             },
-            'verification': {
-                'type': 'HostedBadge'
-            },
-            'badge': 'https://example.com/badgeclass/1',
+            'issuer': 'did:web:example.com:issuer/1',
+            "proof": {
+                "type": "DataIntegrityProof",
+                "cryptosuite": "eddsa-rdfc-2022",
+                "created": "2026-03-07T03:48:38Z",
+                "verificationMethod": "did:web:example.com:issuer:1#key-0",
+                "proofPurpose": "assertionMethod",
+                "proofValue": "z6782xXxUHg1NREJbSv2fnCTgf8vRzuQUt3LpLsCeRTehJ5hXiTnCzr7egSsc19S4t2ANiwFmpURjjsdsXEYWsDK2"
+            }
         }
         data.update(kwargs)
         return data
 
-    def generate_ob2_report(self, **kwargs):
+    def generate_ob3_report(self, **kwargs):
         data = {
             'messages': [],
             "warningCount": 0,
             "valid": True,
-            "openBadgesVersion": "2.0",
+            "openBadgesVersion": "3.0",
             "validationSubject": "https://example.com/badgeclass/1",
             "errorCount": 0
         }
         data.update(kwargs)
         return data
 
-    def generate_ob2_input(self, **kwargs):
+    def generate_ob3_input(self, **kwargs):
         data = {
             "input_type": "url",
             "value": "https://example.com/badgeclass/1"

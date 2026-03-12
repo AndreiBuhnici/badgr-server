@@ -19,7 +19,7 @@ from mainsite.drf_fields import ValidImageField
 from mainsite.models import BadgrApp
 from mainsite.serializers import (CachedUrlHyperlinkedRelatedField, DateTimeWithUtcZAtEndField, StripTagsCharField, MarkdownCharField,
                                   HumanReadableBooleanField, OriginalJsonSerializerMixin)
-from mainsite.validators import ChoicesValidator, TelephoneValidator, BadgeExtensionValidator, PositiveIntegerValidator
+from mainsite.validators import ChoicesValidator, TelephoneValidator, PositiveIntegerValidator
 
 
 class IssuerAccessTokenSerializerV2(BaseSerializerV2):
@@ -76,7 +76,7 @@ class IssuerSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
     description = StripTagsCharField(max_length=16384, required=False)
     url = serializers.URLField(max_length=1024, required=True)
     staff = IssuerStaffSerializerV2(many=True, source='staff_items', required=False)
-    extensions = serializers.DictField(source='extension_items', required=False, validators=[BadgeExtensionValidator()])
+    extensions = serializers.DictField(source='extension_items', required=False)
     badgrDomain = serializers.SlugRelatedField(
         required=False, source='badgrapp', slug_field='cors', queryset=BadgrApp.objects
     )
@@ -252,7 +252,7 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
 
     expires = BadgeClassExpirationSerializerV2(source='*', required=False, allow_null=True)
 
-    extensions = serializers.DictField(source='extension_items', required=False, validators=[BadgeExtensionValidator()])
+    extensions = serializers.DictField(source='extension_items', required=False)
 
     class Meta(DetailSerializerV2.Meta):
         model = BadgeClass
@@ -531,7 +531,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
     notify = HumanReadableBooleanField(write_only=True, required=False, default=False)
     allowDuplicateAwards = serializers.BooleanField(write_only=True, required=False, default=True)
 
-    extensions = serializers.DictField(source='extension_items', required=False, validators=[BadgeExtensionValidator()])
+    extensions = serializers.DictField(source='extension_items', required=False)
 
     class Meta(DetailSerializerV2.Meta):
         model = BadgeInstance

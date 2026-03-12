@@ -162,3 +162,6 @@ LOGGING = {
     },
 }
 
+# Only used for testing purposes, not used in production. This is the key that will be used to encrypt the private keys for DID keys. In production, this should be set to a secure value and stored in an environment variable or file that is not checked into source control.
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+FIELD_ENCRYPTION_KEY = '9mdO43P-liNs2qZMrSP9nuUnWpZmQ7DNPbEpM25hAP4='

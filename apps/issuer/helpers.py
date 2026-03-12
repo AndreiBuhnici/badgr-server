@@ -4,20 +4,21 @@
 import uuid
 from collections import MutableMapping
 
-import openbadges
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 
+from apps import badgrlog
 import requests_cache
 from requests_cache.backends import BaseCache
 
 import logging
 from issuer.models import Issuer, BadgeClass, BadgeInstance
-from issuer.utils import OBI_VERSION_CONTEXT_IRIS
+from issuer.utils import OBI_VERSION_CONTEXT_IRIS, convert_did_web_to_url
 from mainsite.utils import first_node_match
 import json
+import hashlib
 
 
 logger = logging.getLogger(__name__)
@@ -201,57 +202,119 @@ class BadgeCheckHelper(object):
         else:
             badgecheck_recipient_profile = None
 
-        try:
-            if type(query) is dict:
-                try:
-                    query = json.dumps(query)
-                except (TypeError, ValueError):
-                    raise ValidationError("Could not parse dict to json")
-            response = openbadges.verify(query, recipient_profile=badgecheck_recipient_profile, **cls.badgecheck_options())
-        except ValueError as e:
-            raise ValidationError([{'name': "INVALID_BADGE", 'description': str(e)}])
+        if isinstance(query, dict):
+            badge_json = query
+        else:
+            try:
+                badge_json = json.loads(query)
+            except (TypeError, ValueError):
+                raise ValidationError([{'name': "UNABLE_TO_VERIFY", 'description': "Unable to verify the assertion"}])            
 
-        report = response.get('report', {})
-        is_valid = report.get('valid')
+        credentialSubject_json = badge_json.get("credentialSubject")
+        if not credentialSubject_json:
+            raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find credentialSubject in assertion"}])
 
-        if not is_valid:
-            if report.get('errorCount', 0) > 0:
-                errors = list(cls.translate_errors(report.get('messages', [])))
-            else:
-                errors = [{'name': "UNABLE_TO_VERIFY", 'description': "Unable to verify the assertion"}]
-            raise ValidationError(errors)
+        achievement_json = credentialSubject_json.get("achievement")
+        if not achievement_json:
+            raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find achievement in assertion's credentialSubject"}])
+        
+        if type(achievement_json) == str:
+            try:
+                achievement_response = requests_cache.CachedSession().get(achievement_json, headers={'Accept': 'application/ld+json, application/json'})
+                if achievement_response.status_code == 200:
+                    achievement_json = achievement_response.json()
+                else:
+                    raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find achievement: {}".format(achievement_response)}])
+            except Exception as e:
+                raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': f"Unable to find an achievement at {achievement_json}: {str(e)}"}])
 
-        graph = response.get('graph', [])
-
-        assertion_obo = first_node_match(graph, dict(type="Assertion"))
-        if not assertion_obo:
-            raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find an assertion"}])
-
-        badgeclass_obo = first_node_match(graph, dict(id=assertion_obo.get('badge', None)))
-        if not badgeclass_obo:
-            raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find a badgeclass"}])
-
-        issuer_obo = first_node_match(graph, dict(id=badgeclass_obo.get('issuer', None)))
-        if not issuer_obo:
+        issuer_json = badge_json.get("issuer")
+        if not issuer_json:
             raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find an issuer"}])
+        
+        if type(issuer_json) == str:
+            try:
+                url = convert_did_web_to_url(issuer_json, use_https=False)
+                issuer_response = requests_cache.CachedSession().get(url, headers={'Accept': 'application/ld+json, application/json'})
+                if issuer_response.status_code == 200:
+                    issuer_json = issuer_response.json()
+                else:
+                    raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': "Unable to find an issuer: {}".format(issuer_response)}])
+            except Exception as e:
+                raise ValidationError([{'name': "ASSERTION_NOT_FOUND", 'description': f"Unable to find an issuer at {issuer_json}: {str(e)}"}])
 
-        original_json = response.get('input').get('original_json', {})
+        recipient_identifier = None
+        recipient_type = None
+        
+        if badgecheck_recipient_profile:
+            recipient_profile = credentialSubject_json.get('identifier', {})
+            recipient_identifier = recipient_profile.get('identityHash', None)
+            recipient_hashed = recipient_profile.get('hashed', False)
+            recipient_salt = recipient_profile.get('salt', None)
+            recipient_type = recipient_profile.get('identityType', 'email')
+            if recipient_hashed:
+                if not recipient_salt:
+                    raise ValidationError([{'name': "MISSING_SALT", 'description': "Recipient identifier is hashed but no salt provided"}])
+                
+                candidates = (
+                    badgecheck_recipient_profile.get('email', []) +
+                    badgecheck_recipient_profile.get('telephone', []) +
+                    badgecheck_recipient_profile.get('url', [])
+                )
 
-        recipient_profile = report.get('recipientProfile', {})
-        recipient_type, recipient_identifier = list(recipient_profile.items())[0]
+                match_found = False
 
-        issuer_image = Issuer.objects.image_from_ob2(issuer_obo)
-        badgeclass_image = BadgeClass.objects.image_from_ob2(badgeclass_obo)
-        badgeinstance_image = BadgeInstance.objects.image_from_ob2(badgeclass_image, assertion_obo)
+                prefix = recipient_identifier.split('$')[0]
+                if not prefix:
+                    raise ValidationError([{'name': "INVALID_HASH_PREFIX", 'description': "Recipient identifier hash is missing a prefix"}])
+                
+                hashed_value = recipient_identifier.split('$')[1]
+                if not hashed_value:
+                    raise ValidationError([{'name': "INVALID_HASH_VALUE", 'description': "Recipient identifier hash is invalid"}])
 
+                if prefix == 'sha256':
+                    hashing = hashlib.sha256
+                elif prefix == 'md5':
+                    hashing = hashlib.md5
+                else:
+                    raise ValidationError([{'name': "UNSUPPORTED_HASH_PREFIX", 'description': "Recipient identifier hash has unsupported prefix: {}".format(prefix)}])
+
+                for candidate in candidates:
+                    digest = hashing((candidate + recipient_salt).encode()).hexdigest()
+                    if digest == hashed_value:
+                        match_found = True
+                        break
+
+                    digest = hashing((candidate.lower() + recipient_salt).encode()).hexdigest()
+                    if digest == hashed_value:
+                        match_found = True
+                        break
+
+                if not match_found:
+                    raise ValidationError([{
+                        'name': "RECIPIENT_MISMATCH",
+                        'description': "Recipient does not match"
+                    }])
+
+            else:
+                if recipient_identifier not in badgecheck_recipient_profile.get('email', []) + \
+                                            badgecheck_recipient_profile.get('telephone', []) + \
+                                            badgecheck_recipient_profile.get('url', []):
+                    raise ValidationError([{'name': "RECIPIENT_MISMATCH", 'description': "Recipient does not match"}])
+
+        #TODO: fix this since it's still not fully working, keep in mind this is to create badges that are imported
+        issuer_image = Issuer.objects.image_from_ob3(issuer_json)
+        badgeclass_image = BadgeClass.objects.image_from_ob3(achievement_json)
+        badgeinstance_image = BadgeInstance.objects.image_from_ob3(badgeclass_image, badge_json)
+       
         def commit_new_badge():
             with transaction.atomic():
-                issuer = Issuer.objects.get_or_create_from_ob2(issuer_obo, original_json=original_json.get(issuer_obo.get('id')), image=issuer_image)
-                badgeclass = BadgeClass.objects.get_or_create_from_ob2(issuer, badgeclass_obo, original_json=original_json.get(badgeclass_obo.get('id')), image=badgeclass_image)
-                return BadgeInstance.objects.get_or_create_from_ob2(
-                    badgeclass, assertion_obo,
+                issuer = Issuer.objects.get_or_create_from_ob3(issuer_json, image=issuer_image, original_json=issuer_json)
+                badgeclass = BadgeClass.objects.get_or_create_from_ob3(issuer, achievement_json, image=badgeclass_image, original_json=achievement_json)
+                return BadgeInstance.objects.get_or_create_from_ob3(
+                    badgeclass[0], issuer[0], badge_json,
                     recipient_identifier=recipient_identifier, recipient_type=recipient_type,
-                    original_json=original_json.get(assertion_obo.get('id')), image=badgeinstance_image
+                    image=badgeinstance_image, original_json=badge_json
                 )
         try:
             return commit_new_badge()
@@ -261,17 +324,19 @@ class BadgeCheckHelper(object):
 
     @classmethod
     def get_assertion_obo(cls, badge_instance):
-        try:
-            response = openbadges.verify(badge_instance.source_url, recipient_profile=None, **cls.badgecheck_options())
-        except ValueError as e:
-            return None
+        # try:
+        #     response = openbadges.verify(badge_instance.source_url, recipient_profile=None, **cls.badgecheck_options())
+        # except ValueError as e:
+        #     return None
 
-        report = response.get('report', {})
-        is_valid = report.get('valid')
+        # report = response.get('report', {})
+        # is_valid = report.get('valid')
 
-        if is_valid:
-            graph = response.get('graph', [])
+        # if is_valid:
+        #     graph = response.get('graph', [])
 
-            assertion_obo = first_node_match(graph, dict(type="Assertion"))
-            if assertion_obo:
-                return assertion_obo
+        #     assertion_obo = first_node_match(graph, dict(type="Assertion"))
+        #     if assertion_obo:
+        #         return assertion_obo
+        # TODO: Replace openbadges verification with direct retrieval of original_json from badge instance since badgecheck is currently broken and needs to be replaced with openbadges after next release
+        return None
