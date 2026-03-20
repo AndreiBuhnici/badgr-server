@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
                 ('private_key_encrypted', models.TextField()),
                 ('public_key_multibase', models.CharField(max_length=255)),
                 ('is_active', models.BooleanField(default=True)),
-                ('revoked_at', models.DateTimeField(blank=True, null=True)),
+                ('expires_at', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('issuer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='keys', to='issuer.Issuer')),
             ],

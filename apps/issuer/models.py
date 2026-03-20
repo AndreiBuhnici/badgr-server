@@ -1,6 +1,7 @@
 import io
 import datetime
 import urllib.request, urllib.parse, urllib.error
+import requests
 
 import base58
 import dateutil
@@ -16,10 +17,11 @@ import cachemodel
 import os
 from allauth.account.adapter import get_adapter
 from cachemodel import CACHE_FOREVER_TIMEOUT
+from cachemodel.utils import generate_cache_key
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.urls import reverse
@@ -218,21 +220,64 @@ class Issuer(ResizeUploadedImage,
 
         return ret
 
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
+    def _badge_user_cache_key_cached_issuers(self, user_id):
+        return generate_cache_key(
+            ["BadgeUser", "cached_issuers_current_user", user_id]
+        )
 
-        ret = super(Issuer, self).save(*args, **kwargs)
-
-        # if no owner staff records exist, create one for created_by
-        if len(self.owners) < 1 and self.created_by_id:
-            IssuerStaff.objects.create(issuer=self, user=self.created_by, role=IssuerStaff.ROLE_OWNER)
+    def upload_to_issuer_registry(self):
+        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
+        chaincode = getattr(settings, 'ISSUER_CHAINCODE')
+        methods = [
+            {
+                "id": f'{self.did_id}#{k.key_fragment}',
+                "validFrom": k.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "validUntil": k.expires_at.strftime("%Y-%m-%dT%H:%M:%SZ") if k.expires_at else ''
+            } 
+            for k in self.keys.all()
+        ]
         
-        if is_new:
-            self._generate_initial_key()
+        response = requests.post(
+            url = f"{fabric_gateway_url}/submit",
+            headers = {"Content-Type": "application/json"},
+            json = {"chaincode": chaincode, "transaction": "RegisterIssuer", "args": [
+                self.did_id,
+                self.name,
+                json_dumps(methods)
+            ]}
+        )
+        
+        if response.status_code == 200:
+            resp_json = response.json()
+            logger.logger.info(f"Json loaded {resp_json}")
+            if resp_json.get("ok"):
+                logger.logger.info(f"Issuer {self.did_id} successfully registered on issuer registry.")
+            else:
+                raise ValidationError(f"Fabric rejected submit: {response.text}")
+        else:
+            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
+            raise ValidationError("Could not register issuer on issuer registry.")
 
-        return ret
+    def save(self, *args, **kwargs):
+        if self.pk is None:
+            try:
+                with transaction.atomic():
+                    super(Issuer, self).save(*args, **kwargs)
+
+                    # if no owner staff records exist, create one for created_by
+                    if len(self.owners) < 1 and self.created_by_id:
+                        IssuerStaff.objects.create(issuer=self, user=self.created_by, role=IssuerStaff.ROLE_OWNER)
+                    
+                    self._generate_initial_key()
+
+                    self.upload_to_issuer_registry()
+            except Exception as e:
+                # In case transaction fails delete cached issuers of current user
+                cache.delete(self._badge_user_cache_key_cached_issuers(self.created_by_id))
+                raise e
+        else:
+            super(Issuer, self).save(*args, **kwargs)
     
-    @transaction.atomic
     def _generate_initial_key(self):
         signing_key = signing.SigningKey.generate()
         
@@ -464,7 +509,7 @@ class IssuerEncryptionKeys(models.Model):
     public_key_multibase = models.CharField(max_length=255)
 
     is_active = models.BooleanField(default=True)
-    revoked_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def get_signing_key(self):
@@ -971,6 +1016,57 @@ class BadgeInstance(BaseAuditedModel,
 
         return not existing_identifier.verified
 
+    def _badge_user_cache_key_cached_badgeinstances(self, user_id):
+        return generate_cache_key(
+            ["BadgeUser", "cached_badgeinstances", user_id]
+        )
+
+    def upload_to_credentials_registry(self):
+        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
+        chaincode = getattr(settings, 'CREDENTIAL_CHAINCODE')
+        
+        json = self.get_json()
+
+        json.pop('proof', None)
+
+        canonicalized_credential = jsonld.normalize(
+            json,
+            {
+                'algorithm': 'URDNA2015',
+                'format': 'application/n-quads'
+            }
+        )
+
+        # TODO: should we just have the hashed credential ? or should we also include proof without proof value?
+        hashed_credential = hashlib.sha256(canonicalized_credential.encode("utf-8")).digest()
+
+        issuanceDict = {
+            'credentialId': json['id'],
+            # TODO: should also include salt if it is hashed
+            'issuedTo': json['credentialSubject']['identifier']['identityHash'],
+            'issuedAt': json['issuedOn']
+        }
+
+        response = requests.post(
+            url = f"{fabric_gateway_url}/submit",
+            headers = {"Content-Type": "application/json"},
+            json = {"chaincode": chaincode, "transaction": "RegisterCredentialCommitment", "args": [
+                hashed_credential.hex(),
+                json['issuer'],
+                issuanceDict
+            ]}
+        )
+
+        if response.status_code == 200:
+            resp_json = response.json()
+            if resp_json.get("ok"):
+                logger.logger.info(f"Credential {self.entity_id} successfully registered on credential registry.")
+            else:
+                raise ValidationError(f"Fabric rejected submit: {response.text}")
+        else:
+            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
+            raise ValidationError("Could not register credential on credential registry.")
+
     def save(self, *args, **kwargs):
         if self.pk is None:
             # First check if recipient is in the blacklist
@@ -995,19 +1091,28 @@ class BadgeInstance(BaseAuditedModel,
                                 content=ContentFile(new_image.read()),
                                 save=False)
 
-            try:
-                from badgeuser.models import CachedEmailAddress
-                existing_email = CachedEmailAddress.cached.get(email=self.recipient_identifier)
-                if self.recipient_identifier != existing_email.email and \
-                        self.recipient_identifier not in [e.email for e in existing_email.cached_variants()]:
-                    existing_email.add_variant(self.recipient_identifier)
-            except CachedEmailAddress.DoesNotExist:
-                pass
+            with transaction.atomic():
+                try:
+                    super(BadgeInstance, self).save(*args, **kwargs)
 
-        if self.revoked is False:
-            self.revocation_reason = None
+                    try:
+                        from badgeuser.models import CachedEmailAddress
+                        existing_email = CachedEmailAddress.cached.get(email=self.recipient_identifier)
+                        if self.recipient_identifier != existing_email.email and \
+                                self.recipient_identifier not in [e.email for e in existing_email.cached_variants()]:
+                            existing_email.add_variant(self.recipient_identifier)
+                    except CachedEmailAddress.DoesNotExist:
+                        pass
 
-        super(BadgeInstance, self).save(*args, **kwargs)
+                    self.upload_to_credentials_registry()
+                except Exception as e:
+                    cache.delete(self._badge_user_cache_key_cached_badgeinstances(self.user_id))
+                    raise e
+        else:
+            if self.revoked is False:
+                self.revocation_reason = None
+
+            super(BadgeInstance, self).save(*args, **kwargs)
 
     def rebake(self, obi_version=CURRENT_OBI_VERSION, save=True):
         new_image = io.BytesIO()
@@ -1361,7 +1466,6 @@ class BadgeInstance(BaseAuditedModel,
             json_to_bake = self.get_json(
                 obi_version=obi_version,
                 expand_issuer=True,
-                expand_badgeclass=True,
                 include_extra=True
             )
             badgeclass_name, ext = os.path.splitext(self.badgeclass.image.file.name)

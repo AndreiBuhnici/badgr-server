@@ -32,7 +32,7 @@ CURRENT_OBI_VERSION = '3_0'
 CURRENT_OBI_CONTEXT_IRI = OBI_VERSION_CONTEXT_IRIS.get(CURRENT_OBI_VERSION)
 
 # assertions that were baked and saved to BadgeInstance.image used this version
-UNVERSIONED_BAKED_VERSION = '2_0'
+UNVERSIONED_BAKED_VERSION = '3_0'
 
 FERNET_KEY = getattr(settings, 'FIELD_ENCRYPTION_KEY', {})
 fernet = Fernet(FERNET_KEY)

@@ -80,6 +80,7 @@ STATIC_URL = HTTP_ORIGIN + '/static/'
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ORIGIN_WHITELIST = (
     'http://localhost:4200',
+    'http://192.168.117.17:4200'
 )
 
 # Optionally restrict issuer creation to accounts that have the 'issuer.add_issuer' permission
@@ -165,3 +166,7 @@ LOGGING = {
 # Only used for testing purposes, not used in production. This is the key that will be used to encrypt the private keys for DID keys. In production, this should be set to a secure value and stored in an environment variable or file that is not checked into source control.
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 FIELD_ENCRYPTION_KEY = '9mdO43P-liNs2qZMrSP9nuUnWpZmQ7DNPbEpM25hAP4='
+
+FABRIC_GATEWAY_URL = 'http://192.168.117.17:8080'
+ISSUER_CHAINCODE = 'openbadges'
+CREDENTIAL_CHAINCODE = 'openbadges'

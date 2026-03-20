@@ -5,6 +5,8 @@ import re
 import io
 import urllib.request, urllib.parse, urllib.error
 import urllib.parse
+import requests
+from datetime import datetime, timezone
 
 from pyld import jsonld
 import base58
@@ -24,6 +26,7 @@ from rest_framework import status, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from json import loads as json_loads
 
 
 import badgrlog
@@ -508,8 +511,6 @@ class BakedBadgeInstanceImage(VersionedObjectMixin, APIView, SlugToEntityIdRedir
         if requested_version not in list(utils.OBI_VERSION_CONTEXT_IRIS.keys()):
             raise ValidationError("Invalid OpenBadges version")
 
-        # self.log(assertion)
-
         redirect_url = assertion.get_baked_image_url(obi_version=requested_version)
 
         return redirect(redirect_url, permanent=True)
@@ -619,6 +620,80 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
         except BadgeInstance.DoesNotExist:
             raise Http404
 
+    def verify_issuer_registry(self, issuer_did, signing_key):
+        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
+        chaincode = getattr(settings, 'ISSUER_CHAINCODE')
+        
+        response = requests.post(
+            url = f"{fabric_gateway_url}/evaluate",
+            headers = {"Content-Type": "application/json"},
+            json = {"chaincode": chaincode, "transaction": "GetIssuer", "args": [issuer_did]}
+        )
+        
+        if response.status_code == 200:
+            resp_json = response.json()
+            if resp_json.get("ok"):
+                logger.logger.info(f"Issuer {issuer_did} successfully retrieved from issuer registry.")
+
+                ledger_data = json_loads(resp_json['result'])
+
+                if ledger_data['status'] != 'authorized':
+                    raise ValidationError(f"Issuer not authorized, status is {ledger_data['status']}.")
+
+                found_key = None
+                for method in ledger_data['methods']:
+                    if signing_key == method['id']:
+                        found_key = method
+
+                if found_key == None:
+                    raise ValidationError(f"No match for signing key in authorized verification methods.")
+
+                now = datetime.now(timezone.utc)
+                valid_from = datetime.strptime(found_key['validFrom'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+                if now < valid_from:
+                    raise ValidationError(f"Invalid starting date for signing key.")
+
+                if 'validUntil' in found_key.keys():
+                    valid_until = datetime.strptime(found_key['validUntil'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    if now > valid_until:
+                        raise ValidationError(f"Key is expired.")
+            else:
+                raise ValidationError(f"Fabric rejected submit: {response.text}")
+        else:
+            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
+            raise ValidationError("Could not retrieve issuer from issuer registry.")
+
+    def verify_credential_registry(self, credentialHash, issuer_did):
+        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
+        chaincode = getattr(settings, 'CREDENTIAL_CHAINCODE')
+        
+        response = requests.post(
+            url = f"{fabric_gateway_url}/evaluate",
+            headers = {"Content-Type": "application/json"},
+            json = {"chaincode": chaincode, "transaction": "GetCredential", "args": [credentialHash]}
+        )
+
+        if response.status_code == 200:
+            resp_json = response.json()
+            if resp_json.get("ok"):
+                logger.logger.info(f"Credential with hash {credentialHash} successfully retrieved from issuer registry.")
+
+                ledger_data = json_loads(resp_json['result'])
+
+                if ledger_data['status'] != 'active':
+                    raise ValidationError(f"Credential is no longer active, status is {ledger_data['status']}.")
+
+                if ledger_data['issuerId'] != issuer_did:
+                    raise ValidationError(f"Issuers do not match.")
+            else:
+                raise ValidationError(f"Fabric rejected submit: {response.text}")
+
+        else:
+            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
+            raise ValidationError("Could not retrieve credential from credential registry.")
+
+
     def post(self, request, **kwargs):
         entity_id = request.data.get('entity_id')
         external_did = request.data.get('external_did', None)
@@ -681,78 +756,11 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             except Exception as e:
                 raise ValidationError([{'name': "INVALID_SIGNATURE", 'description': 'Signature was forged or corrupt: {}'.format(str(e))}])
 
-        elif obi_version == '2_0':
-            pass
-            #only do badgecheck verify if not a local badge
-            # if (badge_instance.source_url):
-            #     recipient_profile = {
-            #         badge_instance.recipient_type: badge_instance.recipient_identifier
-            #     }
+            # Check Issuer Registry
+            self.verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
 
-            #     badge_check_options = {
-            #         'include_original_json': True,
-            #         'use_cache': True,
-            #     }
-
-            #     try:
-            #         response = openbadges.verify(badge_instance.jsonld_id, recipient_profile=recipient_profile, **badge_check_options)
-            #     except ValueError as e:
-            #         raise ValidationError([{'name': "INVALID_BADGE", 'description': str(e)}])
-
-            #     graph = response.get('graph', [])
-
-            #     revoked_obo = first_node_match(graph, dict(revoked=True))
-
-            #     if bool(revoked_obo):
-            #         instance = BadgeInstance.objects.get(source_url=revoked_obo['id'])
-            #         if not instance.revoked:
-            #             instance.revoke(revoked_obo.get('revocationReason', 'Badge is revoked'))
-
-            #     else:
-            #         report = response.get('report', {})
-            #         is_valid = report.get('valid')
-
-            #         if not is_valid:
-            #             if report.get('errorCount', 0) > 0:
-            #                 errors = [{'name': 'UNABLE_TO_VERIFY', 'description': 'Unable to verify the assertion'}]
-            #             raise ValidationError(errors)
-
-            #         validation_subject = report.get('validationSubject')
-
-            #         badge_instance_obo = first_node_match(graph, dict(id=validation_subject))
-            #         if not badge_instance_obo:
-            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an badge instance'}])
-
-            #         badgeclass_obo = first_node_match(graph, dict(id=badge_instance_obo.get('badge', None)))
-            #         if not badgeclass_obo:
-            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find a badgeclass'}])
-
-            #         issuer_obo = first_node_match(graph, dict(id=badgeclass_obo.get('issuer', None)))
-            #         if not issuer_obo:
-            #             raise ValidationError([{'name': 'ASSERTION_NOT_FOUND', 'description': 'Unable to find an issuer'}])
-
-            #         original_json = response.get('input').get('original_json', {})
-
-            #         BadgeInstance.objects.update_from_ob3(
-            #             badge_instance.badgeclass,
-            #             badge_instance_obo,
-            #             badge_instance.recipient_identifier,
-            #             badge_instance.recipient_type,
-            #             original_json.get(badge_instance_obo.get('id', ''), None)
-            #         )
-
-            #         badge_instance.rebake(save=True)
-
-            #         BadgeClass.objects.update_from_ob3(
-            #             badge_instance.issuer,
-            #             badgeclass_obo,
-            #             original_json.get(badgeclass_obo.get('id', ''), None)
-            #         )
-
-            #         Issuer.objects.update_from_ob3(
-            #             issuer_obo,
-            #             original_json.get(issuer_obo.get('id', ''), None)
-            #         )
+            # Check Credential Registry
+            self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
 
         result = self.get_object(entity_id).get_json(expand_issuer=True)
 
