@@ -103,7 +103,7 @@ class IssuerSerializerV1(OriginalJsonSerializerMixin, serializers.Serializer):
 
     def to_representation(self, obj):
         representation = super(IssuerSerializerV1, self).to_representation(obj)
-        representation['json'] = obj.get_json(obi_version='1_1', use_canonical_id=True)
+        representation['json'] = obj.get_json()
 
         if self.context.get('embed_badgeclasses', False):
             representation['badgeclasses'] = BadgeClassSerializerV1(obj.badgeclasses.all(), many=True, context=self.context).data
@@ -184,7 +184,7 @@ class BadgeClassSerializerV1(OriginalJsonSerializerMixin, serializers.Serializer
     def to_representation(self, instance):
         representation = super(BadgeClassSerializerV1, self).to_representation(instance)
         representation['issuer'] = OriginSetting.HTTP+reverse('issuer_json', kwargs={'entity_id': instance.cached_issuer.entity_id})
-        representation['json'] = instance.get_json(obi_version='1_1', use_canonical_id=True)
+        representation['json'] = instance.get_json()
         return representation
 
     def validate_image(self, image):

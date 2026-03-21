@@ -160,9 +160,9 @@ class BackpackAssertionSerializerV2(DetailSerializerV2, OriginalJsonSerializerMi
             instance_data_pointer = representation['result'][0]
 
         if 'badgeclass' in expands:
-            instance_data_pointer['badgeclass'] = instance.cached_badgeclass.get_json(include_extra=True, use_canonical_id=True)
+            instance_data_pointer['badgeclass'] = instance.cached_badgeclass.get_json(include_extra=True)
             if 'issuer' in expands:
-                instance_data_pointer['badgeclass']['issuer'] = instance.cached_issuer.get_json(include_extra=True, use_canonical_id=True)
+                instance_data_pointer['badgeclass']['issuer'] = instance.cached_issuer.get_json(include_extra=True)
 
         return representation
 

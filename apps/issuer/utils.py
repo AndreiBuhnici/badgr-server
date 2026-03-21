@@ -103,8 +103,12 @@ def convert_did_web_to_url(did, use_https=True):
 
 def convert_url_to_did_web(url):
     parsed = urllib.parse.urlparse(url)
+    host = parsed.netloc
+    path = parsed.path
+    if path.endswith('/did'):
+        path = path[:-len('/did')]
     
-    return f"did:web:{urllib.parse.quote(parsed.netloc)}{parsed.path.replace('/', ':')}"
+    return f"did:web:{urllib.parse.quote(host)}{path.replace('/', ':')}"
 
 def generate_rebaked_filename(oldname, badgeclass_filename):
     parts = oldname.split('.')

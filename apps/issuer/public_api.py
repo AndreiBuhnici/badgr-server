@@ -262,37 +262,6 @@ class ImagePropertyDetailView(APIView, SlugToEntityIdRedirectMixin):
 
         return redirect(image_url)
 
-
-class IssuerJsonOBV2(JSONComponentView):
-    permission_classes = (permissions.AllowAny,)
-    model = Issuer
-
-    def log(self, obj):
-        logger.event(badgrlog.IssuerRetrievedEvent(obj, self.request))
-
-    def get_context_data(self, **kwargs):
-        image_url = "{}{}?type=png".format(
-            OriginSetting.HTTP,
-            reverse('issuer_image', kwargs={'entity_id': self.current_object.entity_id})
-        )
-        if self.is_wide_bot():
-            image_url = "{}&fmt=wide".format(image_url)
-
-        return dict(
-            title=self.current_object.name,
-            description=self.current_object.description,
-            public_url=self.current_object.public_url,
-            image_url=image_url
-        )
-    
-    def get_json(self, request, **kwargs):
-        try:
-            json = self.current_object.get_json(obi_version='2_0')
-        except ObjectDoesNotExist:
-            raise Http404
-
-        return json
-    
 class IssuerDidJson(JSONComponentView):
     permission_classes = (permissions.AllowAny,)
     model = Issuer
@@ -317,7 +286,7 @@ class IssuerDidJson(JSONComponentView):
     
     def get_json(self, request, **kwargs):
         try:
-            json = self.current_object.get_did_json(obi_version=self._get_request_obi_version(request), **kwargs)
+            json = self.current_object.get_json(obi_version=self._get_request_obi_version(request), **kwargs)
         except ObjectDoesNotExist:
             raise Http404
 

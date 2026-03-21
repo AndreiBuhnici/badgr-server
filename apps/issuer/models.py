@@ -391,7 +391,7 @@ class Issuer(ResizeUploadedImage,
     def image_preview(self):
         return self.image
 
-    def get_did_json(self, obi_version=CURRENT_OBI_VERSION):
+    def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True):
         _, ob_context_iri = get_obi_context(obi_version)
         _, did_context_iri = get_did_context('1_0')
         _, credentials_context_iri = get_credentials_context('2_0')
@@ -431,38 +431,6 @@ class Issuer(ResizeUploadedImage,
             json[key.purpose].append(f"{self.did_id}#{key.key_fragment}")
         
         json['verificationMethod'] = verification_method
-
-        return json        
-        
-    def get_json(self, obi_version='2_0', include_extra=True, use_canonical_id=False):
-        obi_version, context_iri = get_obi_context(obi_version)
-
-        json = OrderedDict({'@context': context_iri})
-        json.update(OrderedDict(
-            type='Issuer',
-            id=self.jsonld_id if use_canonical_id else add_obi_version_ifneeded(self.jsonld_id, obi_version),
-            name=self.name,
-            url=self.url,
-            email=self.email,
-            description=self.description))
-
-        image_url = self.image_url(public=True)
-        json['image'] = image_url
-        if self.original_json:
-            logger.logger.info(f"Original JSON for issuer: {self.original_json}")
-            image_info = self.get_original_json().get('image', None)
-            if isinstance(image_info, dict):
-                json['image'] = image_info
-                json['image']['id'] = image_url
-
-        # source url
-        if self.source_url:
-            if obi_version == '1_1':
-                json["source_url"] = self.source_url
-                json["hosted_url"] = OriginSetting.HTTP + self.get_absolute_url()
-            elif obi_version == '2_0':
-                json["sourceUrl"] = self.source_url
-                json["hostedUrl"] = OriginSetting.HTTP + self.get_absolute_url()
 
         # pass through imported json
         if include_extra:
@@ -796,12 +764,12 @@ class BadgeClass(ResizeUploadedImage,
 
 
 
-    def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True, use_canonical_id=False):
+    def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True):
         obi_version, context_iri = get_obi_context(obi_version)
         json = OrderedDict({'@context': context_iri})
         json.update(OrderedDict(
             type='Achievement',
-            id=self.jsonld_id if use_canonical_id else add_obi_version_ifneeded(self.jsonld_id, obi_version),
+            id=self.jsonld_id,
             name=self.name,
             description=self.description_nonnull,
             issuer=self.cached_issuer.did_id,
@@ -1320,14 +1288,6 @@ class BadgeInstance(BaseAuditedModel,
         if self.expires_at:
             json['expires'] = self.expires_at.isoformat()
 
-        # pass through imported json
-        if include_extra:
-            extra = self.get_filtered_json()
-            if extra is not None:
-                for k,v in list(extra.items()):
-                    if k not in json:
-                        json[k] = v
-
         if self.revoked:
             json['revoked'] = True
             json['revocationReason'] = self.revocation_reason if self.revocation_reason else ""
@@ -1386,7 +1346,15 @@ class BadgeInstance(BaseAuditedModel,
             json['proof'] = {
                 **proof_options,
                 "proofValue": proof_value
-            }           
+            }
+
+        # pass through imported json
+        if include_extra:
+            extra = self.get_filtered_json()
+            if extra is not None:
+                for k,v in list(extra.items()):
+                    if k not in json:
+                        json[k] = v   
 
         return json
 
