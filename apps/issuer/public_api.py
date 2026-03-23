@@ -703,7 +703,7 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             doc_hash = hashlib.sha256(canonicalized_vc.encode()).digest()
             proof_hash = hashlib.sha256(canonicalized_proof.encode()).digest()
 
-            message = doc_hash + proof_hash
+            message = proof_hash + doc_hash
 
             # Extract the signed message
             signature = base58.b58decode(proof_value[1:])

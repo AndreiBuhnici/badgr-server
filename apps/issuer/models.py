@@ -284,7 +284,7 @@ class Issuer(ResizeUploadedImage,
         public_raw = signing_key.verify_key.encode()
         private_raw = signing_key.encode()
 
-        ed25519_pub_prefix = bytes.fromhex('ed')
+        ed25519_pub_prefix = bytes.fromhex('ed01')
         ed25519_priv_prefix = bytes.fromhex('1300')
 
         public_multibase = 'z' + base58.b58encode(
@@ -490,7 +490,7 @@ class IssuerEncryptionKeys(models.Model):
     def get_public_key_bytes(self):
         public_multibase = self.public_key_multibase
         public_bytes_with_prefix = base58.b58decode(public_multibase[1:])
-        public_bytes = public_bytes_with_prefix[1:]
+        public_bytes = public_bytes_with_prefix[2:]
 
         return public_bytes
 
@@ -1337,7 +1337,7 @@ class BadgeInstance(BaseAuditedModel,
             ).digest()
             
             # Combine hashes and sign both
-            to_sign = doc_hash + proof_hash
+            to_sign = proof_hash + doc_hash
             private_key = issuer_keys.get_signing_key()
             signature = private_key.sign(to_sign).signature
             proof_value = "z" + base58.b58encode(signature).decode()
