@@ -15,4 +15,5 @@ RUN apt-get install -y default-libmysqlclient-dev \
 RUN pip install uwsgi
 
 COPY requirements.txt              /badgr_server
+COPY truffle/build/contracts/ /badgr_server/truffle/build/contracts/
 RUN pip install -r requirements.txt

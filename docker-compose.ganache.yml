@@ -1,0 +1,18 @@
+# A dockerized ganache server for blockchain development
+services:
+  ganache:
+    image: trufflesuite/ganache:latest
+    command: >
+      --host 0.0.0.0
+      --port 8545
+      --chain.networkId 5777
+    expose:
+      - "8545"
+    networks:
+      - badgr-blockchain
+    ports:
+      - "8545:8545"
+
+networks:
+  badgr-blockchain:
+    external: true

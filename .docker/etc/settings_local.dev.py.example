@@ -167,6 +167,4 @@ LOGGING = {
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 FIELD_ENCRYPTION_KEY = '9mdO43P-liNs2qZMrSP9nuUnWpZmQ7DNPbEpM25hAP4='
 
-FABRIC_GATEWAY_URL = 'http://192.168.117.17:8080'
-ISSUER_CHAINCODE = 'openbadges'
-CREDENTIAL_CHAINCODE = 'openbadges'
+BLOCKCHAIN_RPC_URL = 'http://ganache:8545'

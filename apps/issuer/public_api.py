@@ -8,6 +8,7 @@ import urllib.parse
 import requests
 from datetime import datetime, timezone
 
+from apps.blockchain.services import get_credential
 from pyld import jsonld
 import base58
 from nacl.signing import VerifyKey
@@ -589,79 +590,30 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
         except BadgeInstance.DoesNotExist:
             raise Http404
 
-    def verify_issuer_registry(self, issuer_did, signing_key):
-        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
-        chaincode = getattr(settings, 'ISSUER_CHAINCODE')
-        
-        response = requests.post(
-            url = f"{fabric_gateway_url}/evaluate",
-            headers = {"Content-Type": "application/json"},
-            json = {"chaincode": chaincode, "transaction": "GetIssuer", "args": [issuer_did]}
-        )
-        
-        if response.status_code == 200:
-            resp_json = response.json()
-            if resp_json.get("ok"):
-                logger.logger.info(f"Issuer {issuer_did} successfully retrieved from issuer registry.")
+    def verify_credential_registry(self, credentialHash, issuerDid, credentialId):
 
-                ledger_data = json_loads(resp_json['result'])
+        response = get_credential(credentialHash)
 
-                if ledger_data['status'] != 'authorized':
-                    raise ValidationError(f"Issuer not authorized, status is {ledger_data['status']}.")
-
-                found_key = None
-                for method in ledger_data['methods']:
-                    if signing_key == method['id']:
-                        found_key = method
-
-                if found_key == None:
-                    raise ValidationError(f"No match for signing key in authorized verification methods.")
-
-                now = datetime.now(timezone.utc)
-                valid_from = datetime.strptime(found_key['validFrom'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-
-                if now < valid_from:
-                    raise ValidationError(f"Invalid starting date for signing key.")
-
-                if 'validUntil' in found_key.keys():
-                    valid_until = datetime.strptime(found_key['validUntil'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-                    if now > valid_until:
-                        raise ValidationError(f"Key is expired.")
-            else:
-                raise ValidationError(f"Fabric rejected submit: {response.text}")
-        else:
-            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
-            raise ValidationError("Could not retrieve issuer from issuer registry.")
-
-    def verify_credential_registry(self, credentialHash, issuer_did):
-        fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
-        chaincode = getattr(settings, 'CREDENTIAL_CHAINCODE')
-        
-        response = requests.post(
-            url = f"{fabric_gateway_url}/evaluate",
-            headers = {"Content-Type": "application/json"},
-            json = {"chaincode": chaincode, "transaction": "GetCredential", "args": [credentialHash]}
-        )
-
-        if response.status_code == 200:
-            resp_json = response.json()
-            if resp_json.get("ok"):
-                logger.logger.info(f"Credential with hash {credentialHash} successfully retrieved from issuer registry.")
-
-                ledger_data = json_loads(resp_json['result'])
-
-                if ledger_data['status'] != 'active':
-                    raise ValidationError(f"Credential is no longer active, status is {ledger_data['status']}.")
-
-                if ledger_data['issuerId'] != issuer_did:
-                    raise ValidationError(f"Issuers do not match.")
-            else:
-                raise ValidationError(f"Fabric rejected submit: {response.text}")
-
-        else:
-            logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
+        if not response[0]:
+            logger.logger.error(f"Retrieval not successful: {response}")
             raise ValidationError("Could not retrieve credential from credential registry.")
+        
+        logger.logger.info(f"Credential with hash {credentialHash.hex()} successfully retrieved from credential registry.")
+        
+        if response[2] != issuerDid:
+            raise ValidationError(f"Issuers do not match.")
+        
+        if response[3] != credentialId:
+            raise ValidationError(f"Credential ids do not match.")
+        
+        if response[4] != "active":
+            raise ValidationError(f"Credential is no longer active, status is {response[3]}.")
+        
+        now = datetime.now(timezone.utc)
+        valid_from = datetime.fromtimestamp(response[4], tz=timezone.utc)
 
+        if now < valid_from:
+            raise ValidationError(f"Invalid active start date.")
 
     def post(self, request, **kwargs):
         entity_id = request.data.get('entity_id')
@@ -725,11 +677,8 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             except Exception as e:
                 raise ValidationError([{'name': "INVALID_SIGNATURE", 'description': 'Signature was forged or corrupt: {}'.format(str(e))}])
 
-            # Check Issuer Registry
-            self.verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
-
             # Check Credential Registry
-            self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
+            self.verify_credential_registry(doc_hash, vc['issuer'], vc['id'])
 
         result = self.get_object(entity_id).get_json(expand_issuer=True)
 
