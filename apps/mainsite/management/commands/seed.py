@@ -14,7 +14,7 @@ class Command(BaseCommand):
         '--username':'root',
         '--email'   :'root@example.com',
         '--password':'12345678',
-        '--fronturl':'http://localhost:4200'
+        '--fronturl':'http://192.168.117.17:4200'
     }
 
     def add_arguments(self, parser):

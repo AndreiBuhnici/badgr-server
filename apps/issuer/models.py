@@ -270,7 +270,7 @@ class Issuer(ResizeUploadedImage,
                     
                     self._generate_initial_key()
 
-                    self.upload_to_issuer_registry()
+                    #self.upload_to_issuer_registry()
             except Exception as e:
                 # In case transaction fails delete cached issuers of current user
                 cache.delete(self._badge_user_cache_key_cached_issuers(self.created_by_id))
@@ -1072,7 +1072,7 @@ class BadgeInstance(BaseAuditedModel,
                     except CachedEmailAddress.DoesNotExist:
                         pass
 
-                    self.upload_to_credentials_registry()
+                    #self.upload_to_credentials_registry()
                 except Exception as e:
                     cache.delete(self._badge_user_cache_key_cached_badgeinstances(self.user_id))
                     raise e

@@ -726,10 +726,10 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
                 raise ValidationError([{'name': "INVALID_SIGNATURE", 'description': 'Signature was forged or corrupt: {}'.format(str(e))}])
 
             # Check Issuer Registry
-            self.verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
+            #self.verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
 
             # Check Credential Registry
-            self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
+            #self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
 
         result = self.get_object(entity_id).get_json(expand_issuer=True)
 
