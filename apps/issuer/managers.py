@@ -182,8 +182,8 @@ class BadgeInstanceManager(models.Manager):
             image = _fetch_image_and_get_file(image_url, self.ALLOWED_MINE_TYPES, upload_to='remote/assertion')
 
         issued_on = None
-        if 'issuedOn' in assertion_obo:
-            issued_on = dateutil.parser.parse(assertion_obo.get('issuedOn'))
+        if 'validFrom' in assertion_obo:
+            issued_on = dateutil.parser.parse(assertion_obo.get('validFrom'))
 
         updated, created = self.update_or_create(
             entity_id=assertion_obo.get('id').split(':')[-1],

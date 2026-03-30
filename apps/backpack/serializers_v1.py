@@ -427,7 +427,7 @@ class V1BadgeClassSerializer(serializers.Serializer):
     criteria_text = BadgeStringField(required=False)
     criteria_url = BadgeURLField(required=False)
     issuer = V1IssuerSerializer()
-    tags = serializers.ListField(child=BadgeStringField(), required=False)
+    tag = serializers.ListField(child=BadgeStringField(), required=False)
 
     def to_representation(self, instance):
         representation = super(V1BadgeClassSerializer, self).to_representation(instance)

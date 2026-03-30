@@ -1001,9 +1001,9 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
     def test_can_create_and_update_badgeclass_with_tags_v1(self):
         # create a badgeclass with tags
-        tags = ["first", "second", "third"]
-        new_badgeclass = self._create_badgeclass_for_issuer_authenticated(self.get_test_image_path(), tags=tags)
-        self.assertEqual(tags, new_badgeclass.get('tags', None))
+        tag = ["first", "second", "third"]
+        new_badgeclass = self._create_badgeclass_for_issuer_authenticated(self.get_test_image_path(), tag=tag)
+        self.assertEqual(tag, new_badgeclass.get('tag', None))
 
         new_badgeclass_url = '/v1/issuer/issuers/{issuer}/badges/{badgeclass}'.format(
             issuer=self.issuer.entity_id,
@@ -1012,13 +1012,13 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
         # update tags -- addition and deletion
         reordered_tags = ["second", "third", "fourth"]
-        new_badgeclass['tags'] = reordered_tags
+        new_badgeclass['tag'] = reordered_tags
         new_badgeclass['description'] = "new description"
 
         response = self.client.put(new_badgeclass_url, new_badgeclass, format="json")
         updated_badgeclass = json.loads(response.content)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(updated_badgeclass.get('tags', None), reordered_tags)
+        self.assertEqual(updated_badgeclass.get('tag', None), reordered_tags)
         self.assertEqual(updated_badgeclass.get('description', None), "new description")
 
         # make sure response we got from PUT matches what we get from GET
@@ -1028,7 +1028,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
     def test_can_create_and_update_badgeclass_with_tags_v2(self):
         # create a badgeclass with tags
-        tags = ["first", "second", "third"]
+        tag = ["first", "second", "third"]
 
         test_user = self.setup_user(authenticate=True)
         test_issuer = self.setup_issuer(owner=test_user)
@@ -1040,11 +1040,11 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
                 'image': self._base64_data_uri_encode(badge_image, "image/png"),
                 'criteriaUrl': 'http://wikipedia.org/Awesome',
                 'issuer': self.issuer.entity_id,
-                'tags': tags,
+                'tag': tag,
             }
             response = self.client.post('/v2/badgeclasses', data=example_badgeclass_props, format="json")
             new_badgeclass = response.data.get('result')[0]
-            self.assertEqual(tags, new_badgeclass.get('tags', None))
+            self.assertEqual(tag, new_badgeclass.get('tag', None))
 
         new_badgeclass_url = '/v2/badgeclasses/{badgeclass}'.format(
             badgeclass=new_badgeclass['entityId']
@@ -1052,12 +1052,12 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
         # update tags -- addition and deletion
         reordered_tags = ["second", "third", "fourth"]
-        new_badgeclass['tags'] = reordered_tags
+        new_badgeclass['tag'] = reordered_tags
 
         response = self.client.put(new_badgeclass_url, new_badgeclass, format="json")
         updated_badgeclass = response.data.get('result')[0]
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(updated_badgeclass.get('tags', None), reordered_tags)
+        self.assertEqual(updated_badgeclass.get('tag', None), reordered_tags)
 
         # make sure response we got from PUT matches what we get from GET
         response = self.client.get(new_badgeclass_url)

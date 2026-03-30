@@ -118,7 +118,7 @@
 
     "badge": { "@id": "obi:badge", "@type": "@id" },
     "criteria": { "@id": "obi:criteria", "@type": "@id" },
-    "tags": { "@id": "schema:keywords" },
+    "tag": { "@id": "schema:keywords" },
     "alignment": { "@id": "obi:alignment", "@type": "@id" },
 
     "issuer": { "@id": "obi:issuer", "@type": "@id" },

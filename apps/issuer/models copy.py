@@ -808,7 +808,7 @@ class BadgeClass(ResizeUploadedImage,
         # alignment / tag
         if obi_version == '2_0' or obi_version == '3_0':
             json['alignment'] = [ a.get_json(obi_version=obi_version) for a in self.cached_alignments() ]
-            json['tag'] = [ t.name for t in self.cached_tags() ]
+            json['tag'] = list(t.name for t in self.cached_tags())
 
         # pass through imported json
         if include_extra:

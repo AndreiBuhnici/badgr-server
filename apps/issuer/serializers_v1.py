@@ -167,7 +167,7 @@ class BadgeClassSerializerV1(OriginalJsonSerializerMixin, serializers.Serializer
     description = StripTagsCharField(max_length=16384, required=True, convert_null=True)
 
     alignment = AlignmentItemSerializerV1(many=True, source='alignment_items', required=False)
-    tags = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
+    tag = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
 
     expires = BadgeClassExpirationSerializerV1(source='*', required=False, allow_null=True)
 

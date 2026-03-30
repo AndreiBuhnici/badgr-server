@@ -248,7 +248,7 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
     criteriaNarrative = MarkdownCharField(source='criteria_text', required=False, allow_null=True)
 
     alignments = AlignmentItemSerializerV2(source='alignment_items', many=True, required=False)
-    tags = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
+    tag = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
 
     expires = BadgeClassExpirationSerializerV2(source='*', required=False, allow_null=True)
 
@@ -326,7 +326,7 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
                     'description': "Markdown formatted description of the criteria",
                     'required': False,
                 }),
-                ('tags', {
+                ('tag', {
                     'type': "array",
                     'items': {
                         'type': "string",
