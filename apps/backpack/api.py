@@ -65,7 +65,7 @@ class BackpackAssertionList(BaseEntityListView):
 
         def badge_filter(b):
             if ((b.acceptance == BadgeInstance.ACCEPTANCE_REJECTED) or
-                    (not include_expired and b.expires_at != None and b.expires_at < timezone.now()) or
+                    (not include_expired and b.validUntil != None and b.validUntil < timezone.now()) or
                     (not include_revoked and b.revoked) or
                     (not include_pending and b.pending)):
                 return False

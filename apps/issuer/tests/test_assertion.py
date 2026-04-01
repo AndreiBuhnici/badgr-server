@@ -114,7 +114,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         # v1 api
         v1_backdate = datetime.datetime(year=2021, month=3, day=3, tzinfo=pytz.utc)
         updated_data = dict(
-            expires=v1_backdate.isoformat()
+            validUntil=v1_backdate.isoformat()
         )
 
         response = self.client.put('/v1/issuer/issuers/{issuer}/badges/{badge}/assertions/{assertion}'.format(
@@ -125,12 +125,12 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         self.assertEqual(response.status_code, 200)
         updated_assertion = BadgeInstance.objects.get(entity_id=test_assertion.entity_id)
         updated_obo = json.loads(str(unbake(updated_assertion.image)))
-        self.assertEqual(updated_obo.get('expires', None), updated_data.get('expires'))
+        self.assertEqual(updated_obo.get('validUntil', None), updated_data.get('validUntil'))
 
         # v2 api
         v2_backdate = datetime.datetime(year=2002, month=3, day=3, tzinfo=pytz.UTC)
         updated_data = dict(
-            issuedOn=v2_backdate.isoformat()
+            validFrom=v2_backdate.isoformat()
         )
 
         response = self.client.put('/v2/assertions/{assertion}'.format(
@@ -139,7 +139,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         self.assertEqual(response.status_code, 200)
         updated_assertion = BadgeInstance.objects.get(entity_id=test_assertion.entity_id)
         updated_obo = json.loads(str(unbake(updated_assertion.image)))
-        self.assertEqual(updated_obo.get('issuedOn', None), updated_data.get('issuedOn'))
+        self.assertEqual(updated_obo.get('validFrom', None), updated_data.get('validFrom'))
 
     def test_updating_badgeclass_image_rebakes_assertions(self):
         test_user = self.setup_user(authenticate=True)
@@ -345,7 +345,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
                 'name': test_issuer.name
             }), content_type='application/json')
 
-        response = self.client.get('/public/assertions/{}?expand=badge&expand=badge.issuer'.format(original_assertion['slug']))
+        response = self.client.get('/public/assertions/{}'.format(original_assertion['slug']))
         assertion_data = response.data
         self.assertEqual(assertion_data['badge']['issuer']['email'], email_two.email)
 
@@ -360,7 +360,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         assertion = {
             "email": "test@example.com",
             "create_notification": False,
-            "expires": expiration.isoformat()
+            "validUntil": expiration.isoformat()
         }
         response = self.client.post('/v1/issuer/issuers/{issuer}/badges/{badge}/assertions'.format(
             issuer=test_issuer.entity_id,
@@ -368,7 +368,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         ), assertion)
         self.assertEqual(response.status_code, 201)
         assertion_json = response.data
-        self.assertEqual(dateutil.parser.parse(assertion_json.get('expires')), expiration)
+        self.assertEqual(dateutil.parser.parse(assertion_json.get('validUntil')), expiration)
 
         # v1 endpoint returns expiration
         response = self.client.get('/v1/issuer/issuers/{issuer}/badges/{badge}/assertions/{assertion}'.format(
@@ -378,7 +378,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         ))
         self.assertEqual(response.status_code, 200)
         v1_json = response.data
-        self.assertEqual(dateutil.parser.parse(v1_json.get('expires')), expiration)
+        self.assertEqual(dateutil.parser.parse(v1_json.get('validUntil')), expiration)
 
         # v2 endpoint returns expiration
         response = self.client.get('/v2/assertions/{assertion}'.format(
@@ -386,13 +386,13 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         ))
         self.assertEqual(response.status_code, 200)
         v2_json = response.data.get('result')[0]
-        self.assertEqual(dateutil.parser.parse(v2_json.get('expires')), expiration)
+        self.assertEqual(dateutil.parser.parse(v2_json.get('validUntil')), expiration)
 
         # public url returns expiration
         response = self.client.get(assertion_json.get('public_url'))
         self.assertEqual(response.status_code, 200)
         public_json = response.data
-        self.assertEqual(dateutil.parser.parse(public_json.get('expires')), expiration)
+        self.assertEqual(dateutil.parser.parse(public_json.get('validUntil')), expiration)
 
     def test_can_issue_badge_if_authenticated(self):
         test_user = self.setup_user(authenticate=True)
@@ -901,7 +901,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         test_issuer = self.setup_issuer(owner=test_user)
         test_badgeclass = self.setup_badgeclass(issuer=test_issuer)
         expired_assertion = test_badgeclass.issue(recipient_id='new.recipient@email.test')
-        expired_assertion.expires_at = datetime.datetime.now() - datetime.timedelta(days=1)
+        expired_assertion.validUntil = datetime.datetime.now() - datetime.timedelta(days=1)
         expired_assertion.save()
         test_badgeclass.issue(recipient_id='second.recipient@email.test')
 
@@ -948,7 +948,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
         revoked_assertion.revoked = True
         revoked_assertion.save()
         expired_assertion = test_badgeclass.issue(recipient_id='new.recipient@email.test')
-        expired_assertion.expires_at = datetime.datetime.now() - datetime.timedelta(days=1)
+        expired_assertion.validUntil = datetime.datetime.now() - datetime.timedelta(days=1)
         expired_assertion.save()
 
         response = self.client.get('/v2/issuers/{issuer}/assertions?include_revoked=1&include_expired=1'.format(
@@ -1133,7 +1133,7 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
                         "identity": "bar@baz.com",
                         "type": "email"
                     },
-                    'issuedOn': 1512151153620
+                    'validFrom': 1512151153620
                 },
             ]
         }
@@ -1153,21 +1153,21 @@ class AssertionTests(SetupIssuerHelper, BadgrTestCase):
                 "identity": "bar@baz.com",
                 "type": "email"
             },
-            'issuedOn': issue_time.isoformat()
+            'validFrom': issue_time.isoformat()
         }
 
         response = self.client.post('/v2/badgeclasses/{badge}/assertions'.format(
             badge=test_badgeclass.entity_id
         ), assertion_data, format='json')
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['fieldErrors']['issuedOn'][0], 'Only issuedOn dates in the past are acceptable.')
+        self.assertEqual(response.data['fieldErrors']['validFrom'][0], 'Only validFrom dates in the past are acceptable.')
 
-        assertion_data['issuedOn'] = '1492-01-01T13:00:00Z'  # A time prior to introduction of the Gregorian calendar.
+        assertion_data['validFrom'] = '1492-01-01T13:00:00Z'  # A time prior to introduction of the Gregorian calendar.
         response = self.client.post('/v2/badgeclasses/{badge}/assertions'.format(
             badge=test_badgeclass.entity_id
         ), assertion_data, format='json')
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['fieldErrors']['issuedOn'][0], 'Only issuedOn dates after the introduction of the Gregorian calendar are allowed.')
+        self.assertEqual(response.data['fieldErrors']['validFrom'][0], 'Only validFrom dates after the introduction of the Gregorian calendar are allowed.')
 
     def test_batch_assertions_with_evidence(self):
         test_user = self.setup_user(authenticate=True)
@@ -1623,7 +1623,7 @@ class AllowDuplicatesAPITests(SetupIssuerHelper, BadgrTestCase):
         test_issuer = self.setup_issuer(owner=test_user)
         test_badgeclass = self.setup_badgeclass(issuer=test_issuer)
         existing_assertion = test_badgeclass.issue(
-            'test3@example.com', expires_at=timezone.now() + timezone.timedelta(days=1)
+            'test3@example.com', validUntil=timezone.now() + timezone.timedelta(days=1)
         )
 
         new_assertion_props = {
@@ -1642,7 +1642,7 @@ class AllowDuplicatesAPITests(SetupIssuerHelper, BadgrTestCase):
         test_issuer = self.setup_issuer(owner=test_user)
         test_badgeclass = self.setup_badgeclass(issuer=test_issuer)
         existing_assertion = test_badgeclass.issue(
-            'test3@example.com', expires_at=timezone.now() - timezone.timedelta(days=1)
+            'test3@example.com', validUntil=timezone.now() - timezone.timedelta(days=1)
         )
 
         new_assertion_props = {
@@ -1661,7 +1661,7 @@ class AllowDuplicatesAPITests(SetupIssuerHelper, BadgrTestCase):
         test_issuer = self.setup_issuer(owner=test_user)
         test_badgeclass = self.setup_badgeclass(issuer=test_issuer)
         assertion = test_badgeclass.issue(
-            'test3@example.com', expires_at=timezone.now() - timezone.timedelta(days=1)
+            'test3@example.com', validUntil=timezone.now() - timezone.timedelta(days=1)
         )
         _ = assertion.badgeclass  # call the foreign key attribute to ensure the related object is cached
         self.assertIsNotNone(assertion._state.fields_cache.get('badgeclass'))

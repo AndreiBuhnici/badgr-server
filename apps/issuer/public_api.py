@@ -36,7 +36,7 @@ from entity.api import VersionedObjectMixin
 from mainsite.models import BadgrApp
 from mainsite.utils import (OriginSetting, set_url_query_params, first_node_match, fit_image_to_height,
                             convert_svg_to_png)
-from .models import Issuer, BadgeClass, BadgeInstance, IssuerEncryptionKeys
+from .models import Issuer, BadgeClass, BadgeInstance
 logger = badgrlog.BadgrLogger()
 
 
@@ -161,6 +161,7 @@ class JSONComponentView(VersionedObjectMixin, APIView, SlugToEntityIdRedirectMix
 
         path = self.request.path
         stripped_path = re.sub(r'^/public/', '', path)
+        stripped_path = re.sub(r'/did$', '', stripped_path)
         query_string = self.request.META.get('QUERY_STRING', None)
         ret = '{redirect}{path}{query}'.format(
             redirect=redirect,
@@ -382,8 +383,7 @@ class BadgeInstanceJson(JSONComponentView):
         expands = request.GET.getlist('expand', [])
         json = super(BadgeInstanceJson, self).get_json(
             request,
-            external_did_signing_url=None,
-            expand_issuer=('issuer' in expands)
+            external_did_signing_url=None
         )
 
         return json
@@ -434,7 +434,7 @@ class BackpackCollectionJson(JSONComponentView):
     def get_context_data(self, **kwargs):
         image_url = ''
         if self.current_object.cached_badgeinstances().exists():
-            chosen_assertion = sorted(self.current_object.cached_badgeinstances(), key=lambda b: b.issued_on)[0]
+            chosen_assertion = sorted(self.current_object.cached_badgeinstances(), key=lambda b: b.validFrom)[0]
             image_url = "{}{}?type=png".format(
                 OriginSetting.HTTP,
                 reverse('badgeinstance_image', kwargs={'entity_id': chosen_assertion.entity_id})
@@ -455,9 +455,7 @@ class BackpackCollectionJson(JSONComponentView):
             raise Http404
 
         json = self.current_object.get_json(
-            obi_version=self._get_request_obi_version(request),
-            expand_badgeclass=('badges.badge' in expands),
-            expand_issuer=('badges.badge.issuer' in expands)
+            obi_version=self._get_request_obi_version(request)
         )
         return json
 
@@ -731,6 +729,6 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             # Check Credential Registry
             #self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
 
-        result = self.get_object(entity_id).get_json(expand_issuer=True)
+        result = self.get_object(entity_id).get_json()
 
         return Response(BaseSerializerV2.response_envelope([result], True, 'OK'), status=status.HTTP_200_OK)

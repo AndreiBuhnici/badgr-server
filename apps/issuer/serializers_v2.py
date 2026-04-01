@@ -248,9 +248,9 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
     criteriaNarrative = MarkdownCharField(source='criteria_text', required=False, allow_null=True)
 
     alignments = AlignmentItemSerializerV2(source='alignment_items', many=True, required=False)
-    tags = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
+    tag = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
 
-    expires = BadgeClassExpirationSerializerV2(source='*', required=False, allow_null=True)
+    validUntil = BadgeClassExpirationSerializerV2(source='*', required=False, allow_null=True)
 
     extensions = serializers.DictField(source='extension_items', required=False)
 
@@ -326,7 +326,7 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
                     'description': "Markdown formatted description of the criteria",
                     'required': False,
                 }),
-                ('tags', {
+                ('tag', {
                     'type': "array",
                     'items': {
                         'type': "string",
@@ -343,7 +343,7 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
                     'description': "List of objects describing objectives or educational standards",
                     'required': False,
                 }),
-                ('expires', {
+                ('validUntil', {
                     '$ref': "#/definitions/BadgeClassExpiration",
                     'description': "Expiration period for Assertions awarded from this BadgeClass",
                     'required': False,
@@ -352,10 +352,10 @@ class BadgeClassSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin):
         })
 
     def to_internal_value(self, data):
-        if not isinstance(data, BadgeClass) and 'expires' in data:
-            if not data['expires'] or len(data['expires']) == 0:
-                # if expires was included blank, remove it so to_internal_value() doesnt choke
-                del data['expires']
+        if not isinstance(data, BadgeClass) and 'validUntil' in data:
+            if not data['validUntil'] or len(data['validUntil']) == 0:
+                # if validUntil was included blank, remove it so to_internal_value() doesnt choke
+                del data['validUntil']
         return super(BadgeClassSerializerV2, self).to_internal_value(data)
 
     def update(self, instance, validated_data):
@@ -518,7 +518,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
     image = ValidImageField(read_only=True, use_public=True, source='*')
     recipient = BadgeRecipientSerializerV2(source='*', required=False)
 
-    issuedOn = DateTimeWithUtcZAtEndField(source='issued_on', required=False, default_timezone=pytz.utc)
+    validFrom = DateTimeWithUtcZAtEndField(required=False, default_timezone=pytz.utc)
     narrative = MarkdownCharField(required=False, allow_null=True)
     evidence = EvidenceItemSerializerV2(source='evidence_items', many=True, required=False)
 
@@ -526,7 +526,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
     revocationReason = serializers.CharField(source='revocation_reason', read_only=True)
     acceptance = serializers.CharField(read_only=True)
 
-    expires = DateTimeWithUtcZAtEndField(source='expires_at', required=False, allow_null=True, default_timezone=pytz.utc)
+    validUntil = DateTimeWithUtcZAtEndField(required=False, allow_null=True, default_timezone=pytz.utc)
 
     notify = HumanReadableBooleanField(write_only=True, required=False, default=False)
     allowDuplicateAwards = serializers.BooleanField(write_only=True, required=False, default=True)
@@ -608,7 +608,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
                     'description': "URL to the baked assertion image",
                     'readOnly': True,
                 }),
-                ('issuedOn', {
+                ('validFrom', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'description': "Timestamp when the Assertion was issued",
@@ -634,7 +634,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
                     'description': "Recipient that was issued the Assertion",
                     'required': False,
                 }),
-                ('expires', {
+                ('validUntil', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'description': "Timestamp when the Assertion expires",
@@ -645,18 +645,18 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
 
     def validate_issuedOn(self, value):
         if value > timezone.now():
-            raise serializers.ValidationError("Only issuedOn dates in the past are acceptable.")
+            raise serializers.ValidationError("Only validFrom dates in the past are acceptable.")
         if value.year < 1583:
-            raise serializers.ValidationError("Only issuedOn dates after the introduction of the Gregorian calendar are allowed.")
+            raise serializers.ValidationError("Only validFrom dates after the introduction of the Gregorian calendar are allowed.")
         return value
 
     def update(self, instance, validated_data):
         updateable_fields = [
             'evidence_items',
-            'expires_at',
+            'validUntil',
             'extension_items',
             'hashed',
-            'issued_on',
+            'validFrom',
             'narrative',
             'recipient_identifier',
             'recipient_type'
@@ -720,7 +720,7 @@ class BadgeInstanceSerializerV2(DetailSerializerV2, OriginalJsonSerializerMixin)
                 ).filter(
                     revoked=False
                 ).filter(
-                    Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+                    Q(validUntil__isnull=True) | Q(validUntil__gt=timezone.now())
                 )
                 if previous_awards.exists():
                     raise serializers.ValidationError(

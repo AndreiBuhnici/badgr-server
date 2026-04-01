@@ -30,12 +30,12 @@ class BackpackAssertionSerializerV2(DetailSerializerV2, OriginalJsonSerializerMi
 
     image = serializers.FileField(read_only=True)
     recipient = BadgeRecipientSerializerV2(source='*')
-    issuedOn = DateTimeWithUtcZAtEndField(source='issued_on', read_only=True)
+    validFrom = DateTimeWithUtcZAtEndField(read_only=True)
     narrative = MarkdownCharField(required=False)
     evidence = EvidenceItemSerializerV2(many=True, required=False)
     revoked = HumanReadableBooleanField(read_only=True)
     revocationReason = serializers.CharField(source='revocation_reason', read_only=True)
-    expires = DateTimeWithUtcZAtEndField(source='expires_at', required=False)
+    validUntil = DateTimeWithUtcZAtEndField(required=False)
     pending = serializers.ReadOnlyField()
 
     class Meta(DetailSerializerV2.Meta):
@@ -107,7 +107,7 @@ class BackpackAssertionSerializerV2(DetailSerializerV2, OriginalJsonSerializerMi
                     'description': "Recipient that was issued the Assertion",
                     'required': True,
                 }),
-                ('issuedOn', {
+                ('validFrom', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'description': "Timestamp when the Assertion was issued",
@@ -138,7 +138,7 @@ class BackpackAssertionSerializerV2(DetailSerializerV2, OriginalJsonSerializerMi
                     'description': "Short description of why the Assertion was revoked",
                     'readOnly': True,
                 }),
-                ('expires', {
+                ('validUntil', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'description': "Timestamp when the Assertion expires",

@@ -307,8 +307,6 @@ class PublicAPITests(SetupIssuerHelper, BadgrTestCase):
                     assertion,
                     response,
                     obi_version=obi_version,
-                    expand_badgeclass=True,
-                    expand_issuer=True,
                     include_extra=True
                 )
 
@@ -321,14 +319,14 @@ class PublicAPITests(SetupIssuerHelper, BadgrTestCase):
         test_badgeclass = self.setup_badgeclass(issuer=test_issuer, name=original_badgeclass_name)
         assertion = test_badgeclass.issue(recipient_id='new.recipient@email.test')
 
-        response = self.client.get('/public/assertions/{}?expand=badge'.format(assertion.entity_id), Accept='application/json')
+        response = self.client.get('/public/assertions/{}'.format(assertion.entity_id), Accept='application/json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data.get('badge', {}).get('name', None), original_badgeclass_name)
 
         test_badgeclass.name = new_badgeclass_name
         test_badgeclass.save()
 
-        response = self.client.get('/public/assertions/{}?expand=badge'.format(assertion.entity_id), Accept='application/json')
+        response = self.client.get('/public/assertions/{}'.format(assertion.entity_id), Accept='application/json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data.get('badge', {}).get('name', None), new_badgeclass_name)
 

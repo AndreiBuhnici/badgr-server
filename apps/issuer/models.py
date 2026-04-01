@@ -170,6 +170,7 @@ class Issuer(ResizeUploadedImage,
     url = models.CharField(max_length=254, blank=True, null=True, default=None)
     email = models.CharField(max_length=254, blank=True, null=True, default=None)
     old_json = JSONField()
+    main_signing_key = models.ForeignKey('IssuerKey', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
 
     objects = IssuerManager()
     cached = SlugOrJsonIdCacheModelManager(slug_kwarg_name='entity_id', slug_field_name='entity_id')
@@ -232,7 +233,7 @@ class Issuer(ResizeUploadedImage,
             {
                 "id": f'{self.did_id}#{k.key_fragment}',
                 "validFrom": k.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "validUntil": k.expires_at.strftime("%Y-%m-%dT%H:%M:%SZ") if k.expires_at else ''
+                "validUntil": k.validUntil.strftime("%Y-%m-%dT%H:%M:%SZ") if k.validUntil else ''
             } 
             for k in self.keys.all()
         ]
@@ -279,29 +280,32 @@ class Issuer(ResizeUploadedImage,
             super(Issuer, self).save(*args, **kwargs)
     
     def _generate_initial_key(self):
-        signing_key = signing.SigningKey.generate()
-        
-        public_raw = signing_key.verify_key.encode()
-        private_raw = signing_key.encode()
+        signing_service_url = getattr(settings, 'SIGNING_SERVICE_URL')
+        payload = {
+            "issuerDid": self.did_id,
+            "purpose": 'assertionMethod'
+        }
+        response = requests.post(f'{signing_service_url}/keys', json=payload, timeout=10)
 
-        ed25519_pub_prefix = bytes.fromhex('ed01')
-        ed25519_priv_prefix = bytes.fromhex('1300')
+        if response.status_code != 200:
+            raise ValidationError(f"Proof service error: {response.text}")
 
-        public_multibase = 'z' + base58.b58encode(
-            ed25519_pub_prefix + public_raw
-        ).decode()
+        data = response.json()
+        if not data.get("ok"):
+            raise ValidationError(data.get("error"))
 
-        private_multibase = 'z' + base58.b58encode(
-            ed25519_priv_prefix + private_raw
-        ).decode()
+        key_fragment = data.get("key", {}).get("keyFragment")
+        if not key_fragment:
+            raise ValidationError("Missing keyFragment")
 
-        self.keys.create(
-            key_fragment="key-0",
+        issuer_key = IssuerKey.objects.create(
+            issuer=self,
+            key_fragment=key_fragment,
             purpose="assertionMethod",
-            private_key_encrypted=encrypt_value(private_multibase),
-            public_key_multibase=public_multibase,
-            is_active=True,
+            is_active=True
         )
+
+        Issuer.objects.filter(pk=self.pk).update(main_signing_key=issuer_key)
 
     def get_absolute_url(self):
         return reverse('issuer_json', kwargs={'entity_id': self.entity_id})
@@ -347,6 +351,12 @@ class Issuer(ResizeUploadedImage,
     def staff_items(self):
         return self.cached_issuerstaff()
 
+    @property
+    def main_verification_method(self):
+        if self.main_signing_key:
+            return f'{self.did_id}#{self.main_signing_key.key_fragment}'
+        return None
+
     @staff_items.setter
     def staff_items(self, value):
         """
@@ -391,12 +401,30 @@ class Issuer(ResizeUploadedImage,
     def image_preview(self):
         return self.image
 
+    def _get_public_key_multibase(self, key_fragment):
+        signing_service_url = getattr(settings, 'SIGNING_SERVICE_URL')
+
+        response = requests.get(f"{signing_service_url}/keys", params={
+            "issuerDid": self.did_id,
+            "keyFragment": key_fragment
+        }, timeout=5)
+
+        if response.status_code != 200:
+            raise ValueError(f"Could not fetch key {key_fragment}: {response.text}")
+
+        data = response.json()
+        public_multibase = data.get('key', {}).get('public_key_multibase')
+        if not public_multibase:
+            raise ValueError(f"No public key returned for {key_fragment}")
+        
+        return public_multibase
+
     def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True):
         _, ob_context_iri = get_obi_context(obi_version)
         _, did_context_iri = get_did_context('1_0')
         _, credentials_context_iri = get_credentials_context('2_0')
 
-        json = OrderedDict({'@context': [ob_context_iri, did_context_iri, credentials_context_iri]})
+        json = OrderedDict({'@context': [credentials_context_iri, did_context_iri, ob_context_iri]})
 
         json.update(OrderedDict(
             type='Profile',
@@ -425,10 +453,11 @@ class Issuer(ResizeUploadedImage,
                 "id": f"{self.did_id}#{key.key_fragment}",
                 "type": "Multikey",
                 "controller": self.did_id,
-                "publicKeyMultibase": key.public_key_multibase,
+                "publicKeyMultibase": self._get_public_key_multibase(key.key_fragment),
             })
 
-            json[key.purpose].append(f"{self.did_id}#{key.key_fragment}")
+            if key.purpose in json:
+                json[key.purpose].append(f"{self.did_id}#{key.key_fragment}")
         
         json['verificationMethod'] = verification_method
 
@@ -457,42 +486,19 @@ class Issuer(ResizeUploadedImage,
     def has_nonrevoked_assertions(self):
         return self.badgeinstance_set.filter(revoked=False).exists()
 
-class IssuerEncryptionKeys(models.Model):
-    PURPOSE_CHOICES = [
-        ("authentication", "Authentication"),
-        ("assertionMethod", "Assertion Method"),
-        ("keyAgreement", "Key Agreement"),
-    ]
-
-    issuer = models.ForeignKey(
-        Issuer,
-        on_delete=models.CASCADE,
-        related_name="keys"
-    )
+class IssuerKey(models.Model):
+    issuer = models.ForeignKey("Issuer", related_name="keys", on_delete=models.CASCADE)
 
     key_fragment = models.CharField(max_length=50)
-    purpose = models.CharField(max_length=50, choices=PURPOSE_CHOICES)
-
-    private_key_encrypted = models.TextField()
-    public_key_multibase = models.CharField(max_length=255)
+    purpose = models.CharField(max_length=50, default="assertionMethod")
 
     is_active = models.BooleanField(default=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
 
-    def get_signing_key(self):
-        private_multibase = decrypt_value(self.private_key_encrypted)
-        private_bytes_with_prefix = base58.b58decode(private_multibase[1:])
-        private_bytes = private_bytes_with_prefix[2:]
-
-        return signing.SigningKey(private_bytes)
-
-    def get_public_key_bytes(self):
-        public_multibase = self.public_key_multibase
-        public_bytes_with_prefix = base58.b58decode(public_multibase[1:])
-        public_bytes = public_bytes_with_prefix[2:]
-
-        return public_bytes
+    class Meta:
+        unique_together = ("issuer", "key_fragment")
 
 class IssuerStaff(cachemodel.CacheModel):
     ROLE_OWNER = 'owner'
@@ -610,7 +616,7 @@ class BadgeClass(ResizeUploadedImage,
     def delete(self, *args, **kwargs):
         # if there are some assertions that have not expired
         if self.badgeinstances.filter(revoked=False).filter(
-                models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())).exists():
+                models.Q(validUntil__isnull=True) | models.Q(validUntil__gt=timezone.now())).exists():
             raise ProtectedError("BadgeClass may only be deleted if all BadgeInstances have been revoked.", self)
 
         issuer = self.issuer
@@ -762,18 +768,27 @@ class BadgeClass(ResizeUploadedImage,
         else:
             return getattr(settings, 'HTTP_ORIGIN') + default_storage.url(self.image.name)
 
-
-
     def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True):
         obi_version, context_iri = get_obi_context(obi_version)
         json = OrderedDict({'@context': context_iri})
+
         json.update(OrderedDict(
             type='Achievement',
             id=self.jsonld_id,
             name=self.name,
             description=self.description_nonnull,
-            issuer=self.cached_issuer.did_id,
+            creator={}
         ))
+
+        issuer_json = self.cached_issuer.json
+
+        json['creator']['id'] = issuer_json['id']
+        json['creator']['type'] = issuer_json['type']
+        json['creator']['name'] = issuer_json['name']
+        json['creator']['image'] = issuer_json['image']
+        json['creator']['url'] = issuer_json['url']
+        json['creator']['description'] = issuer_json['description']
+        json['creator']['email'] = issuer_json['email']
 
         # image
         if self.image:
@@ -797,15 +812,10 @@ class BadgeClass(ResizeUploadedImage,
             if self.criteria_text:
                 json['criteria']['narrative'] = self.criteria_text
 
-        # source_url
-        if self.source_url:
-            json["sourceUrl"] = self.source_url
-            json["hostedUrl"] = OriginSetting.HTTP + self.get_absolute_url()
-
-        # alignment / tags
+        # alignment / tag
         if obi_version == '2_0' or obi_version == '3_0':
             json['alignment'] = [ a.get_json(obi_version=obi_version) for a in self.cached_alignments() ]
-            json['tags'] = list(t.name for t in self.cached_tags())
+            json['tag'] = list(t.name for t in self.cached_tags())
 
         # pass through imported json
         if include_extra:
@@ -828,26 +838,26 @@ class BadgeClass(ResizeUploadedImage,
     def cached_badgrapp(self):
         return self.cached_issuer.cached_badgrapp
 
-    def generate_expires_at(self, issued_on=None):
+    def generate_validUntil(self, validFrom=None):
         if not self.expires_duration or not self.expires_amount:
             return None
 
-        if issued_on is None:
-            issued_on = timezone.now()
+        if validFrom is None:
+            validFrom = timezone.now()
 
         duration_kwargs = dict()
         duration_kwargs[self.expires_duration] = self.expires_amount
-        return issued_on + dateutil.relativedelta.relativedelta(**duration_kwargs)
+        return validFrom + dateutil.relativedelta.relativedelta(**duration_kwargs)
 
 
 class BadgeInstance(BaseAuditedModel,
                     BaseVersionedEntity,
                     BaseOpenBadgeObjectModel):
     entity_class_name = 'VerifiableCredential'
-    COMPARABLE_PROPERTIES = ('badgeclass_id', 'entity_id', 'entity_version', 'issued_on', 'pk', 'narrative',
+    COMPARABLE_PROPERTIES = ('badgeclass_id', 'entity_id', 'entity_version', 'validFrom', 'pk', 'narrative',
                              'recipient_identifier', 'recipient_type', 'revoked', 'revocation_reason', 'updated_at',)
 
-    issued_on = models.DateTimeField(blank=False, null=False, default=timezone.now)
+    validFrom = models.DateTimeField(blank=False, null=False, default=timezone.now)
 
     badgeclass = models.ForeignKey(BadgeClass, blank=False, null=False, on_delete=models.CASCADE, related_name='badgeinstances')
     issuer = models.ForeignKey(Issuer, blank=False, null=False,
@@ -872,7 +882,7 @@ class BadgeInstance(BaseAuditedModel,
     revoked = models.BooleanField(default=False, db_index=True)
     revocation_reason = models.CharField(max_length=255, blank=True, null=True, default=None)
 
-    expires_at = models.DateTimeField(blank=True, null=True, default=None)
+    validUntil = models.DateTimeField(blank=True, null=True, default=None)
 
     ACCEPTANCE_UNACCEPTED = 'Unaccepted'
     ACCEPTANCE_ACCEPTED = 'Accepted'
@@ -1012,7 +1022,7 @@ class BadgeInstance(BaseAuditedModel,
             'credentialId': json['id'],
             # TODO: should also include salt if it is hashed
             'issuedTo': json['credentialSubject']['identifier']['identityHash'],
-            'issuedAt': json['issuedOn']
+            'issuedAt': json['validFrom']
         }
 
         response = requests.post(
@@ -1218,12 +1228,31 @@ class BadgeInstance(BaseAuditedModel,
             pass
         return None
 
-    def get_json(self, obi_version=CURRENT_OBI_VERSION, expand_issuer=False, include_extra=True, external_did_signing_url=None):
+    def _signed_credential(self, unsigned_credential, issuer_did, verification_method):
+        signing_service_url = getattr(settings, 'SIGNING_SERVICE_URL')
+        payload = {
+            "unsignedCredential": unsigned_credential,
+            "issuerDid": issuer_did,
+            "verificationMethod": verification_method,
+            "extraDocuments": {}
+        }
+        response = requests.post(f'{signing_service_url}/sign', json=payload, timeout=10)
+
+        if response.status_code != 200:
+            raise ValidationError(f"Proof service error: {response.text}")
+
+        data = response.json()
+        if not data.get("ok"):
+            raise ValidationError(data.get("error"))
+
+        return data['credential']
+
+    def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True, external_did_signing_url=None):
         _, ob_context_iri = get_obi_context(obi_version)
         _, credentials_context_iri = get_credentials_context('2_0')
 
         json = OrderedDict([
-            ('@context', [ob_context_iri, credentials_context_iri]),
+            ('@context', [credentials_context_iri, ob_context_iri]),
             ('type', ['VerifiableCredential', 'OpenBadgeCredential']),
             ('id', self.urn_id)
         ])
@@ -1253,29 +1282,11 @@ class BadgeInstance(BaseAuditedModel,
                 "identityHash": self.recipient_identifier
             }
 
-        image_url = self.image_url(public=True)
-        json['image'] = image_url
-        if self.original_json:
-            image_info = self.get_original_json().get('image', None)
-            if isinstance(image_info, dict):
-                json['image'] = image_info
-                json['image']['id'] = image_url
-
-        if expand_issuer:
-            issuer = self.cached_issuer.get_json(obi_version=obi_version, include_extra=include_extra)
-            issuer.pop('@context', None)
-            json['issuer'] = issuer
-        else:
-            json['issuer'] = self.cached_issuer.did_id
-
-        # source url
-        if self.source_url:
-            json["sourceUrl"] = self.source_url
-            json["hostedUrl"] = OriginSetting.HTTP + self.get_absolute_url()
+        json['issuer'] = self.cached_issuer.did_id
 
         # evidence
         if self.evidence_url:
-            if obi_version == '2_0':
+            if obi_version == '2_0' or obi_version == '3_0':
                 # obi v2 multiple evidence
                 json['evidence'] = [e.get_json(obi_version) for e in self.cached_evidence()]
 
@@ -1283,70 +1294,13 @@ class BadgeInstance(BaseAuditedModel,
         if self.narrative and obi_version == '2_0':
             json['narrative'] = self.narrative
 
-        # issuedOn / expires
-        json['issuedOn'] = self.issued_on.isoformat()
-        if self.expires_at:
-            json['expires'] = self.expires_at.isoformat()
+        # validFrom / validUntil
+        json['validFrom'] = self.validFrom.isoformat()
+        if self.validUntil:
+            json['validUntil'] = self.validUntil.isoformat()
 
-        if self.revoked:
-            json['revoked'] = True
-            json['revocationReason'] = self.revocation_reason if self.revocation_reason else ""
-
-        if obi_version == '2_0':
-            json["verification"] = {
-                "type": "HostedBadge"
-            }
-        elif obi_version == '3_0':
-            # Remove proof in case it already exists, which might not be possible since it's created from scratch, but just to be safe
-            json.pop('proof', None)
-
-            # Canonicalize the assertion
-            canonicalized = jsonld.normalize(
-                json,
-                {
-                    'algorithm': 'URDNA2015',
-                    'format': 'application/n-quads'
-                }
-            )
-
-            # Hash the canonicalized assertion
-            doc_hash = hashlib.sha256(canonicalized.encode("utf-8")).digest()
-
-            if external_did_signing_url is not None:
-                issuer_keys = IssuerEncryptionKeys()
-            else:
-                # Create proof options, canonicalize them and hash them
-                issuer_keys = self.cached_issuer.keys.filter(is_active=True, purpose="assertionMethod").first()
-
-            proof_options = {
-                "type": "DataIntegrityProof",
-                "cryptosuite": "eddsa-rdfc-2022",
-                "created": datetime.datetime.now().replace(microsecond=0).isoformat() + "Z",
-                "verificationMethod": issuer_keys.issuer.did_id + '#' + issuer_keys.key_fragment,
-                "proofPurpose": "assertionMethod"
-            }
-            canonicalized_proof = jsonld.normalize(
-                proof_options,
-                {
-                    "algorithm": "URDNA2015",
-                    "format": "application/n-quads"
-                }
-            )
-            proof_hash = hashlib.sha256(
-                canonicalized_proof.encode("utf-8")
-            ).digest()
-            
-            # Combine hashes and sign both
-            to_sign = proof_hash + doc_hash
-            private_key = issuer_keys.get_signing_key()
-            signature = private_key.sign(to_sign).signature
-            proof_value = "z" + base58.b58encode(signature).decode()
-
-            # Add proof to the assertion
-            json['proof'] = {
-                **proof_options,
-                "proofValue": proof_value
-            }
+        logger.logger.info(json_dumps(json))
+        json = self._signed_credential(json, self.cached_issuer.did_id, self.cached_issuer.main_verification_method)
 
         # pass through imported json
         if include_extra:
@@ -1362,11 +1316,11 @@ class BadgeInstance(BaseAuditedModel,
     def json(self):
         return self.get_json()
 
-    def get_filtered_json(self, excluded_fields=('@context', 'id', 'type', 'uid', 'recipient', 'badge', 'issuedOn', 'image', 'evidence', 'narrative', 'revoked', 'revocationReason', 'verify', 'verification')):
+    def get_filtered_json(self, excluded_fields=('@context', 'id', 'type', 'uid', 'recipient', 'badge', 'validFrom', 'image', 'evidence', 'narrative', 'verify', 'verification')):
         filtered = super(BadgeInstance, self).get_filtered_json(excluded_fields=excluded_fields)
         # Ensure that the expires date string is in the expected ISO-85601 UTC format
-        if filtered is not None and filtered.get('expires', None) and not str(filtered.get('expires')).endswith('Z'):
-            filtered['expires'] = parse_original_datetime(filtered['expires'])
+        if filtered is not None and filtered.get('validUntil', None) and not str(filtered.get('validUntil')).endswith('Z'):
+            filtered['validUntil'] = parse_original_datetime(filtered['validUntil'])
         return filtered
 
     @cachemodel.cached_method(auto_publish=True)
@@ -1433,7 +1387,6 @@ class BadgeInstance(BaseAuditedModel,
 
             json_to_bake = self.get_json(
                 obi_version=obi_version,
-                expand_issuer=True,
                 include_extra=True
             )
             badgeclass_name, ext = os.path.splitext(self.badgeclass.image.file.name)

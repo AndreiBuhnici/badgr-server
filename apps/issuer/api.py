@@ -466,7 +466,7 @@ class BadgeInstanceList(UncachedPaginatedViewMixin, VersionedObjectMixin, BaseEn
             queryset = queryset.filter(recipient_identifier__in=recipients)
         if request.query_params.get('include_expired', '').lower() not in ['1', 'true']:
             queryset = queryset.filter(
-                Q(expires_at__gte=datetime.datetime.now()) | Q(expires_at__isnull=True))
+                Q(validUntil__gte=datetime.datetime.now()) | Q(validUntil__isnull=True))
         if request.query_params.get('include_revoked', '').lower() not in ['1', 'true']:
             queryset = queryset.filter(revoked=False)
 
@@ -545,7 +545,7 @@ class IssuerBadgeInstanceList(UncachedPaginatedViewMixin, VersionedObjectMixin, 
             queryset = queryset.filter(recipient_identifier__in=recipients)
         if request.query_params.get('include_expired', '').lower() not in ['1', 'true']:
             queryset = queryset.filter(
-                Q(expires_at__gte=datetime.datetime.now()) | Q(expires_at__isnull=True))
+                Q(validUntil__gte=datetime.datetime.now()) | Q(validUntil__isnull=True))
         if request.query_params.get('include_revoked', '').lower() not in ['1', 'true']:
             queryset = queryset.filter(revoked=False)
         return queryset

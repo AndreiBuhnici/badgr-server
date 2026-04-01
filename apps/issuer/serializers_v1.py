@@ -167,18 +167,18 @@ class BadgeClassSerializerV1(OriginalJsonSerializerMixin, serializers.Serializer
     description = StripTagsCharField(max_length=16384, required=True, convert_null=True)
 
     alignment = AlignmentItemSerializerV1(many=True, source='alignment_items', required=False)
-    tags = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
+    tag = serializers.ListField(child=StripTagsCharField(max_length=1024), source='tag_items', required=False)
 
-    expires = BadgeClassExpirationSerializerV1(source='*', required=False, allow_null=True)
+    validUntil = BadgeClassExpirationSerializerV1(source='*', required=False, allow_null=True)
 
     class Meta:
         apispec_definition = ('BadgeClass', {})
 
     def to_internal_value(self, data):
-        if 'expires' in data:
-            if not data['expires'] or len(data['expires']) == 0:
-                # if expires was included blank, remove it so to_internal_value() doesnt choke
-                del data['expires']
+        if 'validUntil' in data:
+            if not data['validUntil'] or len(data['validUntil']) == 0:
+                # if validUntil was included blank, remove it so to_internal_value() doesnt choke
+                del data['validUntil']
         return super(BadgeClassSerializerV1, self).to_internal_value(data)
 
     def to_representation(self, instance):
@@ -310,7 +310,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
     revoked = HumanReadableBooleanField(read_only=True)
     revocation_reason = serializers.CharField(read_only=True)
 
-    expires = DateTimeWithUtcZAtEndField(source='expires_at', required=False, allow_null=True, default_timezone=pytz.utc)
+    validUntil = DateTimeWithUtcZAtEndField(required=False, allow_null=True, default_timezone=pytz.utc)
 
     create_notification = HumanReadableBooleanField(write_only=True, required=False, default=False)
     allow_duplicate_awards = serializers.BooleanField(write_only=True, required=False, default=True)
@@ -344,7 +344,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
             previous_awards = BadgeInstance.objects.filter(
                 recipient_identifier=data['recipient_identifier'], badgeclass=self.context['badgeclass']
             ).filter(
-                Q(expires_at__isnull=True) | Q(expires_at__lt=timezone.now())
+                Q(validUntil__isnull=True) | Q(validUntil__lt=timezone.now())
             )
             if previous_awards.exists():
                 raise serializers.ValidationError(
@@ -407,7 +407,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
                 allow_uppercase=validated_data.get('allow_uppercase'),
                 recipient_type=validated_data.get('recipient_type', RECIPIENT_TYPE_EMAIL),
                 badgr_app=BadgrApp.objects.get_current(self.context.get('request')),
-                expires_at=validated_data.get('expires_at', None),
+                validUntil=validated_data.get('validUntil', None),
                 extensions=validated_data.get('extension_items', None)
             )
         except DjangoValidationError as e:
@@ -416,7 +416,7 @@ class BadgeInstanceSerializerV1(OriginalJsonSerializerMixin, serializers.Seriali
     def update(self, instance, validated_data):
         updateable_fields = [
             'evidence_items',
-            'expires_at',
+            'validUntil',
             'extension_items',
             'hashed',
             'narrative',

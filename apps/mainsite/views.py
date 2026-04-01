@@ -148,7 +148,7 @@ class SitewideActionForm(forms.Form):
     CHOICES = (
         (ACTION_CLEAR_CACHE, 'Clear Cache',),
         (ACTION_REBAKE_ALL_ASSERTIONS, 'Rebake all assertions',),
-        (ACTION_FIX_ISSUEDON, 'Re-process issuedOn for backpack assertions',),
+        (ACTION_FIX_ISSUEDON, 'Re-process validFrom for backpack assertions',),
     )
 
     action = forms.ChoiceField(choices=CHOICES, required=True, label="Pick an action")

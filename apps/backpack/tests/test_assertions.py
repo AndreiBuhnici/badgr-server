@@ -110,7 +110,7 @@
 #             'type': 'Assertion',
 #             "recipient": {"identity": "test@example.com", "hashed": False, "type": "email"},
 #             "badge": "http://a.com/badgeclass",
-#             "issuedOn": "2015-04-30",
+#             "validFrom": "2015-04-30",
 #             "verify": {"type": "hosted", "url": "http://a.com/instance"}
 #         }
 #         badgeclass_data = {
@@ -280,7 +280,7 @@
 #             "id": "http://a.com/instance2",
 #             "recipient": {"identity": "test@example.com", "hashed": False, "type": "email"},
 #             "badge": "http://a.com/badgeclass",
-#             "issuedOn": "2015-04-30T00:00+00:00",
+#             "validFrom": "2015-04-30T00:00+00:00",
 #             "verify": {"type": "hosted", "url": "http://a.com/instance2"},
 #             "extensions:ExampleExtension": {
 #                 "@context": "https://openbadgespec.org/extensions/exampleExtension/context.json",
@@ -370,7 +370,7 @@
 #         self.assertIsNotNone(public_url)
 #         response = self.client.get(public_url, Accept="application/json")
 
-#         for key in ['issuedOn']:
+#         for key in ['validFrom']:
 #             fetched_ts = dateutil.parser.parse(response.data.get(key))
 #             metadata_ts = dateutil.parser.parse(assertion_metadata.get(key))
 #             self.assertEqual(fetched_ts, metadata_ts)
@@ -672,7 +672,7 @@
 #         self.assertIsNotNone(first_node_match(response.data, dict(
 #             messageLevel='ERROR',
 #             name='VALIDATE_PROPERTY',
-#             prop_name='issuedOn'
+#             prop_name='validFrom'
 #         )))
 
 #     @responses.activate
@@ -884,7 +884,7 @@
 #             user=test_recipient, identifier='https://twitter.com/testuser1', verified=True,
 #             type=UserRecipientIdentifier.IDENTIFIER_TYPE_URL
 #         )
-#         assertion_data = """{"@context":"https://w3id.org/openbadges/v2","type":"Assertion","id":"https://gist.githubusercontent.com/badgebotio/456assertion789/raw","recipient":{"type":"url","hashed":false,"identity":"https://twitter.com/testuser1"},"evidence":{"id:":"https://twitter.com/someuser/status/1176267317866635999","narrative":"Issued on Twitter by Badgebot from [@someuser](https://twitter.com/someuser)"},"issuedOn":"2019-10-02T11:29:25-04:00","badge":"https://gist.githubusercontent.com/badgebotio/456badgeclass789/raw","verification":{"type":"hosted"}}"""
+#         assertion_data = """{"@context":"https://w3id.org/openbadges/v2","type":"Assertion","id":"https://gist.githubusercontent.com/badgebotio/456assertion789/raw","recipient":{"type":"url","hashed":false,"identity":"https://twitter.com/testuser1"},"evidence":{"id:":"https://twitter.com/someuser/status/1176267317866635999","narrative":"Issued on Twitter by Badgebot from [@someuser](https://twitter.com/someuser)"},"validFrom":"2019-10-02T11:29:25-04:00","badge":"https://gist.githubusercontent.com/badgebotio/456badgeclass789/raw","verification":{"type":"hosted"}}"""
 #         badgeclass_data = """{"@context":"https://w3id.org/openbadges/v2","type":"BadgeClass","id":"https://gist.githubusercontent.com/badgebotio/456badgeclass789/raw","name":"You Rock! Badge","description":"Inaugural BadgeBot badge! Recipients of this badge are being recognized for making an impact.","image":"https://gist.githubusercontent.com/badgebotio/456badgeclass789/raw/you-rock-badge.svg","criteria":{"narrative":"Awarded on Twitter"},"issuer":"https://gist.githubusercontent.com/badgebotio/456issuer789/raw"}"""
 #         badgeclass_image = """<?xml version="1.0" standalone="no"?><svg height="100" width="100"><circle cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" /></svg>"""
 #         issuer_data = """{"@context":"https://w3id.org/openbadges/v2","type":"Issuer","id":"https://gist.githubusercontent.com/badgebotio/456issuer789/raw","name":"BadgeBot","url":"https://badgebot.io"}"""
@@ -960,14 +960,14 @@
 #         test_recipient = self.setup_user(email='test_recipient@email.test', authenticate=True)
 #         test_badgeclass.issue(recipient_id='test_recipient@email.test')
 
-#         response = self.client.get('/v2/backpack/assertions?expand=badgeclass')
+#         response = self.client.get('/v2/backpack/assertions')
 
 #         self.assertEqual(response.status_code, 200)
 #         self.assertTrue(isinstance(response.data['result'][0]['badgeclass'], collections.OrderedDict))
 #         self.assertTrue(not isinstance(response.data['result'][0]['badgeclass']['issuer'], collections.OrderedDict))
 
 #         fid = response.data['result'][0]['entityId']
-#         response = self.client.get('/v2/backpack/assertions/{}?expand=badgeclass&expand=issuer'.format(fid))
+#         response = self.client.get('/v2/backpack/assertions/{}'.format(fid))
 #         self.assertEqual(response.status_code, 200)
 
 #         self.assertTrue(isinstance(response.data['result'][0]['badgeclass'], dict))
@@ -983,7 +983,7 @@
 #         test_recipient = self.setup_user(email='test_recipient@email.test', authenticate=True)
 #         test_badgeclass.issue(recipient_id='test_recipient@email.test')
 
-#         responseOne = self.client.get('/v2/backpack/assertions?expand=issuer')
+#         responseOne = self.client.get('/v2/backpack/assertions')
 #         responseTwo = self.client.get('/v2/backpack/assertions')
 
 #         self.assertEqual(responseOne.status_code, 200)
@@ -1000,7 +1000,7 @@
 #         test_recipient = self.setup_user(email='test_recipient@email.test', authenticate=True)
 #         test_badgeclass.issue(recipient_id='test_recipient@email.test')
 
-#         response = self.client.get('/v2/backpack/assertions?expand=badgeclass&expand=issuer')
+#         response = self.client.get('/v2/backpack/assertions')
 
 #         self.assertEqual(response.status_code, 200)
 #         self.assertTrue(isinstance(response.data['result'][0]['badgeclass'], collections.OrderedDict))
@@ -1032,7 +1032,7 @@
 #         test_badgeclass_one.issue(recipient_id='test_recipient@email.test')
 #         test_badgeclass_one.issue(recipient_id='test_recipient@email.test')
 
-#         response = self.client.get('/v2/backpack/assertions?expand=badgeclass')
+#         response = self.client.get('/v2/backpack/assertions')
 
 #         self.assertEqual(len(response.data['result']), 6)
 #         for i in range(6):
@@ -1064,7 +1064,7 @@
 #         test_badgeclass_one.issue(recipient_id='test_recipient@email.test')
 #         test_badgeclass_one.issue(recipient_id='test_recipient@email.test')
 
-#         response = self.client.get('/v2/backpack/assertions?expand=badgeclass&expand=issuer')
+#         response = self.client.get('/v2/backpack/assertions')
 
 #         self.assertEqual(len(response.data['result']), 6)
 #         for i in range(6):
@@ -1199,7 +1199,7 @@
 #         test_issuer_one = self.setup_issuer(name="Test Issuer 1", owner=test_user)
 #         test_badgeclass_one = self.setup_badgeclass(name='Test Badgeclass 1', issuer=test_issuer_one)
 #         expired_assertion = test_badgeclass_one.issue(recipient_id='test@example.com', recipient_type='email')
-#         expired_assertion.expires_at = datetime.datetime.now() - datetime.timedelta(days=1)
+#         expired_assertion.validUntil = datetime.datetime.now() - datetime.timedelta(days=1)
 #         expired_assertion.save()
 #         test_badgeclass_one.issue(recipient_id='test@example.com', recipient_type='email')
 
@@ -1220,7 +1220,7 @@
 #         test_issuer_one = self.setup_issuer(name="Test Issuer 1", owner=test_user)
 #         test_badgeclass_one = self.setup_badgeclass(name='Test Badgeclass 1', issuer=test_issuer_one)
 #         expired_assertion = test_badgeclass_one.issue(recipient_id='test@example.com', recipient_type='email')
-#         expired_assertion.expires_at = datetime.datetime.now() - datetime.timedelta(days=1)
+#         expired_assertion.validUntil = datetime.datetime.now() - datetime.timedelta(days=1)
 #         expired_assertion.save()
 #         revoked_assertion = test_badgeclass_one.issue(recipient_id='test@example.com', recipient_type='email')
 #         revoked_assertion.revoked = True

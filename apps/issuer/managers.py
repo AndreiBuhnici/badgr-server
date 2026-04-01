@@ -181,9 +181,9 @@ class BadgeInstanceManager(models.Manager):
         if image_url:
             image = _fetch_image_and_get_file(image_url, self.ALLOWED_MINE_TYPES, upload_to='remote/assertion')
 
-        issued_on = None
-        if 'issuedOn' in assertion_obo:
-            issued_on = dateutil.parser.parse(assertion_obo.get('issuedOn'))
+        validFrom = None
+        if 'validFrom' in assertion_obo:
+            validFrom = dateutil.parser.parse(assertion_obo.get('validFrom'))
 
         updated, created = self.update_or_create(
             entity_id=assertion_obo.get('id').split(':')[-1],
@@ -197,7 +197,7 @@ class BadgeInstanceManager(models.Manager):
                 image=image,
                 acceptance=self.model.ACCEPTANCE_ACCEPTED,
                 narrative=assertion_obo.get('narrative', None),
-                issued_on=issued_on
+                validFrom=validFrom
             )
         )
         evidence = list_of(assertion_obo.get('evidence', None))
@@ -225,9 +225,9 @@ class BadgeInstanceManager(models.Manager):
 
     @transaction.atomic
     def get_or_create_from_ob3(self, badgeclass, issuer, assertion_obo, recipient_identifier, recipient_type='email', source=None, image=None, original_json=None):
-        issued_on = None
-        if 'issuedOn' in assertion_obo:
-            issued_on = dateutil.parser.parse(assertion_obo.get('issuedOn'))
+        validFrom = None
+        if 'validFrom' in assertion_obo:
+            validFrom = dateutil.parser.parse(assertion_obo.get('validFrom'))
 
         badgeinstance, created = self.get_or_create(
             entity_id=assertion_obo.get('id').split(':')[-1],
@@ -242,7 +242,7 @@ class BadgeInstanceManager(models.Manager):
                 image=image,
                 acceptance=self.model.ACCEPTANCE_ACCEPTED,
                 narrative=assertion_obo.get('narrative', None),
-                issued_on=issued_on
+                validFrom=validFrom
             )
         )
         if created:

@@ -274,7 +274,7 @@ class Ob3Generators(object):
                 'VerifiableCredential',
                 'OpenBadgeCredential'
             ],
-            'issuedOn': '2017-06-29T21:50:14+00:00',
+            'validFrom': '2017-06-29T21:50:14+00:00',
             'credentialSubject': {
                 'type': 'AchievementSubject',
                 'achievement': {

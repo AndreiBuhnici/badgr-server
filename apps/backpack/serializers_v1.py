@@ -427,7 +427,7 @@ class V1BadgeClassSerializer(serializers.Serializer):
     criteria_text = BadgeStringField(required=False)
     criteria_url = BadgeURLField(required=False)
     issuer = V1IssuerSerializer()
-    tags = serializers.ListField(child=BadgeStringField(), required=False)
+    tag = serializers.ListField(child=BadgeStringField(), required=False)
 
     def to_representation(self, instance):
         representation = super(V1BadgeClassSerializer, self).to_representation(instance)
@@ -442,8 +442,8 @@ class V1InstanceSerializer(serializers.Serializer):
     uid = BadgeStringField(required=False)
     recipient = BadgeEmailField()  # TODO: improve for richer types
     badge = V1BadgeClassSerializer()
-    issuedOn = BadgeDateTimeField(required=False)  # missing in some translated v0.5.0
-    expires = BadgeDateTimeField(required=False)
+    validFrom = BadgeDateTimeField(required=False)  # missing in some translated v0.5.0
+    validUntil = BadgeDateTimeField(required=False)
     image = BadgeImageURLField(required=False)
     evidence = BadgeURLField(required=False)
 

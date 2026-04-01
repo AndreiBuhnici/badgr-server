@@ -1,0 +1,23 @@
+curl -X POST http://localhost:3100/sign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unsignedCredential": {
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json"
+      ],
+      "id": "urn:uuid:xxx",
+      "type": [
+        "VerifiableCredential",
+        "OpenBadgeCredential"
+      ],
+      "issuer": "did:web:example.com:issuer:123",
+      "validFrom": "2026-03-31T00:00:00Z",
+      "credentialSubject": {
+        "type": "AchievementSubject"
+      }
+    },
+    "issuerDid": "did:web:example.com:issuer:123",
+    "verificationMethod": "did:web:example.com:issuer:123#key-1",
+    "extraDocuments": {}
+  }'

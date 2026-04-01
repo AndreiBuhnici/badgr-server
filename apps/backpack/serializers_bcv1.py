@@ -115,12 +115,12 @@ class BadgeConnectAssertionSerializer(BadgeConnectBaseEntitySerializer):
     badge = serializers.URLField(source='badgeclass_jsonld_id', read_only=True)
     image = serializers.FileField(read_only=True)
     recipient = BadgeRecipientSerializerV2(source='*')
-    issuedOn = serializers.DateTimeField(source='issued_on', read_only=True)
+    validFrom = serializers.DateTimeField(read_only=True)
     narrative = MarkdownCharField(required=False)
     evidence = EvidenceItemSerializerV2(many=True, required=False)
     revoked = HumanReadableBooleanField(read_only=True)
     revocationReason = serializers.CharField(source='revocation_reason', read_only=True)
-    expires = serializers.DateTimeField(source='expires_at', required=False)
+    validUntil = serializers.DateTimeField(required=False)
     type = serializers.CharField(read_only=True, default='Assertion')
 
     class Meta:
@@ -152,7 +152,7 @@ class BadgeConnectAssertionSerializer(BadgeConnectBaseEntitySerializer):
                     'readOnly': True,
                     'description': "Recipient that was issued the Assertion"
                 }),
-                ('issuedOn', {
+                ('validFrom', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'readOnly': True,
@@ -179,7 +179,7 @@ class BadgeConnectAssertionSerializer(BadgeConnectBaseEntitySerializer):
                     'readOnly': True,
                     'description': "Short description of why the Assertion was revoked",
                 }),
-                ('expires', {
+                ('validUntil', {
                     'type': 'string',
                     'format': 'ISO8601 timestamp',
                     'description': "Timestamp when the Assertion expires",

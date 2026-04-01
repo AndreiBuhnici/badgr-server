@@ -164,11 +164,11 @@ def update_issuedon_imported_assertion(self, assertion_entityid):
             'message': "Unable to fetch assertion with source_url={}".format(assertion.source_url)
         }
 
-    original_issuedOn_date = dateutil.parser.parse(assertion_obo['issuedOn'])
+    original_issuedOn_date = dateutil.parser.parse(assertion_obo['validFrom'])
     updated = False
 
-    if original_issuedOn_date != assertion.issued_on:
-        assertion.issued_on = original_issuedOn_date
+    if original_issuedOn_date != assertion.validFrom:
+        assertion.validFrom = original_issuedOn_date
         assertion.save()
         updated = True
 

@@ -12,6 +12,7 @@ services:
       memcached:
         condition: service_started
     command: '/badgr_server/manage.py runserver 0.0.0.0:8000'
+    restart: unless-stopped
     volumes:
       - ./apps:/badgr_server/apps
       - ./manage.py:/badgr_server/manage.py
@@ -24,6 +25,7 @@ services:
   # this container runs memcached
   memcached:
     image: 'bitnami/memcached:latest'
+    restart: unless-stopped
     expose:
       - "11211"
     networks:
@@ -45,6 +47,7 @@ services:
       retries: 5
       start_period: 30s
       timeout: 10s
+    restart: unless-stopped
     expose:
       - "3306"
     networks:

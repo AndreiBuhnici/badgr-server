@@ -212,14 +212,14 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         # can create a badgeclass with valid expires_in_days
         v1_data = base_badgeclass_data.copy()
         v1_data.update(dict(
-            expires=dict(
+            validUntil=dict(
                 amount=10,
                 duration="days"
             ),
         ))
         response = self.client.post('/v1/issuer/issuers/{issuer}/badges'.format(issuer=test_issuer.entity_id), data=v1_data, format="json")
         self.assertEqual(response.status_code, 201)
-        self.assertDictEqual(response.data.get('expires'), v1_data.get('expires'))
+        self.assertDictEqual(response.data.get('validUntil'), v1_data.get('validUntil'))
 
         badgeclass_entity_id = response.data.get('slug')
 
@@ -237,10 +237,10 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
             {"amount": 1, "duration": "years"},
         ]
         for good_value in good_expires_values:
-            v1_data['expires'] = good_value
+            v1_data['validUntil'] = good_value
             response = _update_badgeclass(v1_data)
             self.assertEqual(response.status_code, 200)
-            self.assertDictEqual(response.data.get('expires'), good_value)
+            self.assertDictEqual(response.data.get('validUntil'), good_value)
 
         # can't use invalid expires_in_days
         bad_expires_values = [
@@ -251,7 +251,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
             {"amount": 5, "duration": "fortnights"}
         ]
         for bad_value in bad_expires_values:
-            v1_data['expires'] = bad_value
+            v1_data['validUntil'] = bad_value
             response = _update_badgeclass(v1_data)
             self.assertEqual(response.status_code, 400)
 
@@ -270,7 +270,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         # can create a badgeclass with valid expires_in_days
         v2_data = base_badgeclass_data.copy()
         v2_data.update(dict(
-            expires=dict(
+            validUntil=dict(
                 amount=10,
                 duration="days"
             )
@@ -278,7 +278,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         response = self.client.post('/v2/badgeclasses', data=v2_data, format="json")
         self.assertEqual(response.status_code, 201)
         new_badgeclass = response.data.get('result', [None])[0]
-        self.assertEqual(new_badgeclass.get('expires'), v2_data.get('expires'))
+        self.assertEqual(new_badgeclass.get('validUntil'), v2_data.get('validUntil'))
 
         # can update a badgeclass expires_in_days
         def _update_badgeclass(data):
@@ -293,11 +293,11 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
             {"amount": 1, "duration": "years"},
         ]
         for good_data in good_expires_values:
-            v2_data['expires'] = good_data
+            v2_data['validUntil'] = good_data
             response = _update_badgeclass(v2_data)
             self.assertEqual(response.status_code, 200)
             updated_badgeclass = response.data.get('result', [None])[0]
-            self.assertDictEqual(updated_badgeclass.get('expires'), v2_data.get('expires'))
+            self.assertDictEqual(updated_badgeclass.get('validUntil'), v2_data.get('validUntil'))
 
         # can't use invalid expiration
         bad_expires_values = [
@@ -308,7 +308,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
             {"amount": 5, "duration": "fortnights"}
         ]
         for bad_value in bad_expires_values:
-            v2_data['expires'] = bad_value
+            v2_data['validUntil'] = bad_value
             response = _update_badgeclass(v2_data)
             self.assertEqual(response.status_code, 400)
 
@@ -321,21 +321,21 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         badgeclass.expires_duration = BadgeClass.EXPIRES_DURATION_MONTHS
         badgeclass.expires_amount = 6
 
-        date = badgeclass.generate_expires_at(issued_on=timezone.datetime(year=2018, month=8, day=29, hour=12, tzinfo=timezone.utc))
+        date = badgeclass.generate_validUntil(validFrom=timezone.datetime(year=2018, month=8, day=29, hour=12, tzinfo=timezone.utc))
         self.assertEqual(date.year, 2019)
         self.assertEqual(date.month, 2)
         self.assertEqual(date.day, 28)
 
         badgeclass.expires_duration = BadgeClass.EXPIRES_DURATION_YEARS
-        date = badgeclass.generate_expires_at(
-            issued_on=timezone.datetime(year=2020, month=2, day=29, hour=12, tzinfo=timezone.utc))
+        date = badgeclass.generate_validUntil(
+            validFrom=timezone.datetime(year=2020, month=2, day=29, hour=12, tzinfo=timezone.utc))
         self.assertEqual(date.year, 2026)
         self.assertEqual(date.month, 2)
         self.assertEqual(date.day, 28)
 
         badgeclass.expires_duration = BadgeClass.EXPIRES_DURATION_DAYS
-        date = badgeclass.generate_expires_at(
-            issued_on=timezone.datetime(year=2020, month=2, day=29, hour=12, tzinfo=timezone.utc))
+        date = badgeclass.generate_validUntil(
+            validFrom=timezone.datetime(year=2020, month=2, day=29, hour=12, tzinfo=timezone.utc))
         self.assertEqual(date.year, 2020)
         self.assertEqual(date.month, 3)
         self.assertEqual(date.day, 6)
@@ -496,7 +496,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         recently = timezone.now() - timezone.timedelta(hours=12)
 
         # issue badge to a recipient
-        test_badgeclass.issue(recipient_id='new.recipient@email.test', issued_on=yesterday, expires_at=recently)
+        test_badgeclass.issue(recipient_id='new.recipient@email.test', validFrom=yesterday, validUntil=recently)
 
         response = self.client.delete('/v1/issuer/issuers/{issuer}/badges/{badge}'.format(
             issuer=test_issuer.entity_id,
@@ -621,7 +621,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         badgeclass = self.setup_badgeclass(test_issuer, name='test badgeclass 1')
 
         response = self.client.get('/v2/issuers/{}/badgeclasses'.format(test_issuer.entity_id))  # populate cache
-        response = self.client.get('/public/badges/{}?expand=issuer'.format(badgeclass.entity_id))
+        response = self.client.get('/public/badges/{}'.format(badgeclass.entity_id))
 
         issuer_data = {
             'name': '2',
@@ -632,7 +632,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         response = self.client.put('/v2/issuers/{}'.format(test_issuer.entity_id), data=issuer_data)
         self.assertEqual(response.status_code, 200)
 
-        response = self.client.get('/public/badges/{}?expand=issuer'.format(badgeclass.entity_id))
+        response = self.client.get('/public/badges/{}'.format(badgeclass.entity_id))
         issuer_name = response.data['issuer']['name']
         self.assertEqual(issuer_name, '2')
 
@@ -1001,9 +1001,9 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
     def test_can_create_and_update_badgeclass_with_tags_v1(self):
         # create a badgeclass with tags
-        tags = ["first", "second", "third"]
-        new_badgeclass = self._create_badgeclass_for_issuer_authenticated(self.get_test_image_path(), tags=tags)
-        self.assertEqual(tags, new_badgeclass.get('tags', None))
+        tag = ["first", "second", "third"]
+        new_badgeclass = self._create_badgeclass_for_issuer_authenticated(self.get_test_image_path(), tag=tag)
+        self.assertEqual(tag, new_badgeclass.get('tag', None))
 
         new_badgeclass_url = '/v1/issuer/issuers/{issuer}/badges/{badgeclass}'.format(
             issuer=self.issuer.entity_id,
@@ -1012,13 +1012,13 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
         # update tags -- addition and deletion
         reordered_tags = ["second", "third", "fourth"]
-        new_badgeclass['tags'] = reordered_tags
+        new_badgeclass['tag'] = reordered_tags
         new_badgeclass['description'] = "new description"
 
         response = self.client.put(new_badgeclass_url, new_badgeclass, format="json")
         updated_badgeclass = json.loads(response.content)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(updated_badgeclass.get('tags', None), reordered_tags)
+        self.assertEqual(updated_badgeclass.get('tag', None), reordered_tags)
         self.assertEqual(updated_badgeclass.get('description', None), "new description")
 
         # make sure response we got from PUT matches what we get from GET
@@ -1028,7 +1028,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
     def test_can_create_and_update_badgeclass_with_tags_v2(self):
         # create a badgeclass with tags
-        tags = ["first", "second", "third"]
+        tag = ["first", "second", "third"]
 
         test_user = self.setup_user(authenticate=True)
         test_issuer = self.setup_issuer(owner=test_user)
@@ -1040,11 +1040,11 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
                 'image': self._base64_data_uri_encode(badge_image, "image/png"),
                 'criteriaUrl': 'http://wikipedia.org/Awesome',
                 'issuer': self.issuer.entity_id,
-                'tags': tags,
+                'tag': tag,
             }
             response = self.client.post('/v2/badgeclasses', data=example_badgeclass_props, format="json")
             new_badgeclass = response.data.get('result')[0]
-            self.assertEqual(tags, new_badgeclass.get('tags', None))
+            self.assertEqual(tag, new_badgeclass.get('tag', None))
 
         new_badgeclass_url = '/v2/badgeclasses/{badgeclass}'.format(
             badgeclass=new_badgeclass['entityId']
@@ -1052,12 +1052,12 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
 
         # update tags -- addition and deletion
         reordered_tags = ["second", "third", "fourth"]
-        new_badgeclass['tags'] = reordered_tags
+        new_badgeclass['tag'] = reordered_tags
 
         response = self.client.put(new_badgeclass_url, new_badgeclass, format="json")
         updated_badgeclass = response.data.get('result')[0]
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(updated_badgeclass.get('tags', None), reordered_tags)
+        self.assertEqual(updated_badgeclass.get('tag', None), reordered_tags)
 
         # make sure response we got from PUT matches what we get from GET
         response = self.client.get(new_badgeclass_url)
@@ -1181,7 +1181,7 @@ class BadgeClassTests(SetupIssuerHelper, BadgrTestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        response = self.client.get('/public/assertions/{}.json?expand=badge&expand=badge.issuer'.format(assertion_slug))
+        response = self.client.get('/public/assertions/{}.json'.format(assertion_slug))
         self.assertEqual(response.data['badge']['issuer']['name'], 'Issuer 1 updated')
 
     def test_can_create_badgeclass_with_serverAdmin_token(self):

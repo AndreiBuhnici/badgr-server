@@ -135,7 +135,7 @@ class BackpackCollection(BaseAuditedModelDeletedWithUser, BaseVersionedEntity):
                         badgeinstance=badgeinstance
                     ).delete()
 
-    def get_json(self, obi_version=CURRENT_OBI_VERSION, expand_badgeclass=False, expand_issuer=False, include_extra=True):
+    def get_json(self, obi_version=CURRENT_OBI_VERSION, include_extra=True):
         obi_version, context_iri = get_obi_context(obi_version)
 
         json = OrderedDict([
@@ -151,7 +151,6 @@ class BackpackCollection(BaseAuditedModelDeletedWithUser, BaseVersionedEntity):
             ]))
         ])
         json['badges'] = [b.get_json(obi_version=obi_version,
-                                     expand_issuer=expand_issuer,
                                      include_extra=include_extra) for b in self.cached_badgeinstances()]
 
         return json

@@ -180,7 +180,7 @@ class BadgeInstanceAdmin(DjangoObjectActions, ModelAdmin):
             'fields': ('badgeclass', 'issuer')
         }),
         ('Assertion', {
-            'fields': ('entity_id', 'acceptance', 'recipient_type', 'recipient_identifier', 'image', 'issued_on', 'expires_at', 'narrative')
+            'fields': ('entity_id', 'acceptance', 'recipient_type', 'recipient_identifier', 'image', 'validFrom', 'validUntil', 'narrative')
         }),
         ('Revocation', {
             'fields': ('revoked', 'revocation_reason')
