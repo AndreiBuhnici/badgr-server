@@ -424,7 +424,7 @@ class Issuer(ResizeUploadedImage,
         _, did_context_iri = get_did_context('1_0')
         _, credentials_context_iri = get_credentials_context('2_0')
 
-        json = OrderedDict({'@context': [credentials_context_iri, did_context_iri, ob_context_iri]})
+        json = OrderedDict({'@context': [did_context_iri, credentials_context_iri, ob_context_iri]})
 
         json.update(OrderedDict(
             type='Profile',
@@ -451,8 +451,9 @@ class Issuer(ResizeUploadedImage,
         for key in active_keys:
             verification_method.append({
                 "id": f"{self.did_id}#{key.key_fragment}",
-                "type": "Multikey",
-                "controller": self.did_id,
+                "type": "Ed25519VerificationKey2020",
+                "cryptosuite": "eddsa-rdf-2022",
+                "controller": self.jsonld_id,
                 "publicKeyMultibase": self._get_public_key_multibase(key.key_fragment),
             })
 
@@ -1299,7 +1300,6 @@ class BadgeInstance(BaseAuditedModel,
         if self.validUntil:
             json['validUntil'] = self.validUntil.isoformat()
 
-        logger.logger.info(json_dumps(json))
         json = self._signed_credential(json, self.cached_issuer.did_id, self.cached_issuer.main_verification_method)
 
         # pass through imported json

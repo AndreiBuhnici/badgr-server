@@ -587,7 +587,7 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
         except BadgeInstance.DoesNotExist:
             raise Http404
 
-    def verify_issuer_registry(self, issuer_did, signing_key):
+    def _verify_issuer_registry(self, issuer_did, signing_key):
         fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
         chaincode = getattr(settings, 'ISSUER_CHAINCODE')
         
@@ -631,7 +631,7 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
             raise ValidationError("Could not retrieve issuer from issuer registry.")
 
-    def verify_credential_registry(self, credentialHash, issuer_did):
+    def _verify_credential_registry(self, credentialHash, issuer_did):
         fabric_gateway_url = getattr(settings, 'FABRIC_GATEWAY_URL')
         chaincode = getattr(settings, 'CREDENTIAL_CHAINCODE')
         
@@ -660,6 +660,24 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
             logger.logger.error(f"HTTP error: {response.status_code} {response.text}")
             raise ValidationError("Could not retrieve credential from credential registry.")
 
+    def _verify_credential_and_signature(self, signed_credential):
+        signing_service_url = getattr(settings, 'SIGNING_SERVICE_URL')
+        payload = {
+            "credential": signed_credential,
+            "extraDocuments": {}
+        }
+        response = requests.post(f'{signing_service_url}/verify', json=payload, timeout=10)
+
+        if response.status_code != 200:
+            raise ValidationError(f"Proof service error: {response.text}")
+
+        data = response.json()
+
+        if not data.get("ok"):
+            raise ValidationError(data.get("error"))
+
+        if not data.get("verified"):
+            raise ValidationError(f"Verification failed, found {data.get('error')}: {data.get('results')}")
 
     def post(self, request, **kwargs):
         entity_id = request.data.get('entity_id')
@@ -671,63 +689,13 @@ class VerifyBadgeAPIEndpoint(JSONComponentView):
         badge_instance = self.get_object(entity_id)
 
         if obi_version == '3_0':
-            # Get the json
-            vc = badge_instance.get_json(obi_version=obi_version)
-            
-            # Remove proof options
-            proof = vc.pop("proof")
-
-            # Remove the proof value
-            proof_value = proof.pop("proofValue")
-
-            # Canonicalize the vc json and the proof options
-            canonicalized_vc = jsonld.normalize(
-                vc,
-                {
-                    'algorithm': 'URDNA2015',
-                    'format': 'application/n-quads'
-                }
-            )
-
-            canonicalized_proof = jsonld.normalize(
-                proof,
-                {
-                    'algorithm': 'URDNA2015',
-                    'format': 'application/n-quads'
-                }
-            )
-            
-            # Hash the canonicalized vc and proof options
-            doc_hash = hashlib.sha256(canonicalized_vc.encode()).digest()
-            proof_hash = hashlib.sha256(canonicalized_proof.encode()).digest()
-
-            message = proof_hash + doc_hash
-
-            # Extract the signed message
-            signature = base58.b58decode(proof_value[1:])
-
-            # Get the public key of the issuer
-            if external_did is not None and external_did.startswith('did:web:'):
-                url = utils.convert_did_web_to_url(external_did)
-
-                # TODO: use url to download did json and extract public key
-                public_key_bytes = None
-            else:
-                issuer_keys = badge_instance.cached_issuer.keys.filter(key_fragment=proof['verificationMethod'].split('#')[-1]).first()
-                public_key_bytes = issuer_keys.get_public_key_bytes()
-            
-            # Check the signature
-            verify_key = VerifyKey(public_key_bytes)
-            try:
-                verify_key.verify(message, signature)
-            except Exception as e:
-                raise ValidationError([{'name': "INVALID_SIGNATURE", 'description': 'Signature was forged or corrupt: {}'.format(str(e))}])
+            self._verify_credential_and_signature(badge_instance.get_json(obi_version=obi_version))
 
             # Check Issuer Registry
-            #self.verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
+            #self._verify_issuer_registry(vc['issuer'], proof['verificationMethod'])
 
             # Check Credential Registry
-            #self.verify_credential_registry(doc_hash.hex(), vc['issuer'])
+            #self._verify_credential_registry(doc_hash.hex(), vc['issuer'])
 
         result = self.get_object(entity_id).get_json()
 
